@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from database.models import ShiftModel
+from ui.components.styled_widgets import StyledCard, SectionHeader
 
 class ShiftView(ctk.CTkFrame):
     def __init__(self, master, db_manager):
@@ -12,18 +13,19 @@ class ShiftView(ctk.CTkFrame):
 
         # Header
         self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.header_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
-        self.header_frame.grid_columnconfigure(0, weight=1)
-
-        self.header = ctk.CTkLabel(self.header_frame, text="班次配置管理", font=ctk.CTkFont(size=24, weight="bold"))
-        self.header.grid(row=0, column=0, sticky="w")
-
-        self.add_btn = ctk.CTkButton(self.header_frame, text="新增班次", command=self.show_add_dialog)
-        self.add_btn.grid(row=0, column=1, sticky="e")
+        self.header_frame.grid(row=0, column=0, padx=40, pady=(40, 20), sticky="ew")
+        
+        SectionHeader(self.header_frame, text="班次配置管理").pack(anchor="w")
+        
+        self.add_btn = ctk.CTkButton(self.header_frame, text="➕ 新增班次", command=self.show_add_dialog)
+        self.add_btn.place(relx=1.0, rely=0.5, anchor="e")
 
         # Table Section
-        self.content_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
+        self.table_card = StyledCard(self, title="班次列表")
+        self.table_card.grid(row=1, column=0, sticky="nsew", padx=30, pady=(0, 30))
+        
+        self.content_frame = ctk.CTkScrollableFrame(self.table_card, fg_color="transparent")
+        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=20)
         self.content_frame.grid_columnconfigure(0, weight=1)
 
         self.load_shifts()
@@ -35,8 +37,8 @@ class ShiftView(ctk.CTkFrame):
         shifts = self.shift_model.get_all_active()
         
         # Table Header
-        header_f = ctk.CTkFrame(self.content_frame, fg_color="gray30" if ctk.get_appearance_mode() == "Dark" else "gray80")
-        header_f.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        header_f = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        header_f.grid(row=0, column=0, sticky="ew", padx=10, pady=(0, 5))
         header_f.grid_columnconfigure((0,1,2,3,4), weight=1)
 
         cols = ["班次名称", "类型", "开始时间", "结束时间", "工作时长"]
@@ -46,8 +48,9 @@ class ShiftView(ctk.CTkFrame):
         for idx, s in enumerate(shifts):
             s_id, s_name, s_type, s_start, s_end, s_hours, s_status, s_remark, _, _ = s
             
-            row_f = ctk.CTkFrame(self.content_frame)
-            row_f.grid(row=idx+1, column=0, sticky="ew", padx=10, pady=2)
+            bg_color = "transparent" if idx % 2 == 0 else ("gray90", "gray20")
+            row_f = ctk.CTkFrame(self.content_frame, fg_color=bg_color, corner_radius=5)
+            row_f.grid(row=idx+1, column=0, sticky="ew", padx=10, pady=1)
             row_f.grid_columnconfigure((0,1,2,3,4), weight=1)
 
             ctk.CTkLabel(row_f, text=s_name).grid(row=0, column=0, padx=5, pady=5)
@@ -57,7 +60,6 @@ class ShiftView(ctk.CTkFrame):
             ctk.CTkLabel(row_f, text=f"{s_hours}h").grid(row=0, column=4, padx=5, pady=5)
 
     def show_add_dialog(self):
-        # A simple dialog to add shift
         dialog = ctk.CTkToplevel(self)
         dialog.title("新增班次")
         dialog.geometry("400x500")

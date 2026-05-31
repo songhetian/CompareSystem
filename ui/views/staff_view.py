@@ -25,7 +25,7 @@ class StaffView(ctk.CTkFrame):
         self.table_card.grid(row=1, column=0, sticky="nsew", padx=30, pady=(0, 30))
         
         self.content_frame = ctk.CTkScrollableFrame(self.table_card, fg_color="transparent")
-        self.content_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=20)
         self.content_frame.grid_columnconfigure(0, weight=1)
 
         self.load_staff()

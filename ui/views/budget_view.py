@@ -8,16 +8,6 @@ import os
 from datetime import datetime, timedelta
 
 class BudgetView(ctk.CTkFrame):
-import customtkinter as ctk
-from logic.calculator import ManpowerCalculator
-from database.models import BudgetRecordModel, ShiftModel
-from ui.components.styled_widgets import StyledCard, MetricCard, SectionHeader, PrecisionSlider
-import pandas as pd
-from tkinter import filedialog
-import os
-from datetime import datetime, timedelta
-
-class BudgetView(ctk.CTkFrame):
     def __init__(self, master, db_manager):
         super().__init__(master, corner_radius=0, fg_color="transparent")
         self.db_manager = db_manager
@@ -55,20 +45,20 @@ class BudgetView(ctk.CTkFrame):
         self.context_card.pack(fill="x", pady=(0, 20))
         
         ctx_inner = ctk.CTkFrame(self.context_card, fg_color="transparent")
-        ctx_inner.pack(fill="x", padx=20, pady=20)
+        ctx_inner.grid(row=1, column=0, padx=20, pady=20, sticky="ew")
 
         # Sales Input
-        ctk.CTkLabel(ctx_inner, text="期间销售总额(万元):", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=5)
+        ctk.CTkLabel(ctx_inner, text="期间销售总额(万元):", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, padx=5, pady=5)
         self.sales_entry = ctk.CTkEntry(ctx_inner, placeholder_text="200", width=120)
         self.sales_entry.insert(0, "200")
-        self.sales_entry.pack(side="left", padx=5)
+        self.sales_entry.grid(row=0, column=1, padx=5, pady=5)
 
         # 1.2 Shift Selection
         self.shift_card = StyledCard(self.left_col, title="2. 参与班次选择", subtitle="勾选此期间执行的固定班次")
         self.shift_card.pack(fill="x", pady=(0, 20))
         
         self.shift_container = ctk.CTkFrame(self.shift_card, fg_color="transparent")
-        self.shift_container.pack(fill="x", padx=20, pady=20)
+        self.shift_container.grid(row=1, column=0, padx=20, pady=20, sticky="ew")
         self.load_shift_checkboxes()
 
         # RIGHT COLUMN
@@ -80,17 +70,15 @@ class BudgetView(ctk.CTkFrame):
         self.result_card.pack(fill="x", pady=(0, 20))
         
         res_inner = ctk.CTkFrame(self.result_card, fg_color="transparent")
-        res_inner.pack(fill="x", padx=20, pady=20)
+        res_inner.grid(row=1, column=0, padx=20, pady=20, sticky="ew")
 
         self.card_staff = MetricCard(res_inner, "建议总人力", "0", unit=" 人", icon="👥", color=("#1f538d", "#235ba0"))
-        self.card_staff.pack(fill="x", pady=5)
+        self.card_staff.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         
-        row_f = ctk.CTkFrame(res_inner, fg_color="transparent")
-        row_f.pack(fill="x", pady=5)
-        self.card_daily_c = MetricCard(row_f, "预估日均咨询", "0", icon="💬", color=("#3B8ED0", "#1F6AA5"))
-        self.card_daily_c.pack(side="left", expand=True, fill="x", padx=(0, 5))
-        self.card_hours = MetricCard(row_f, "日均需求工时", "0", unit="h", icon="⏰", color=("#3B8ED0", "#1F6AA5"))
-        self.card_hours.pack(side="right", expand=True, fill="x", padx=(5, 0))
+        self.card_daily_c = MetricCard(res_inner, "预估日均咨询", "0", icon="💬", color=("#3B8ED0", "#1F6AA5"))
+        self.card_daily_c.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+        self.card_hours = MetricCard(res_inner, "日均需求工时", "0", unit="h", icon="⏰", color=("#3B8ED0", "#1F6AA5"))
+        self.card_hours.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
 
         self.calc_btn = ctk.CTkButton(self.right_col, text="⚡ 执行全量测算", height=50,
                                        font=ctk.CTkFont(size=16, weight="bold"),
