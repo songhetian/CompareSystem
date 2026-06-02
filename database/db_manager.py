@@ -98,6 +98,31 @@ class DatabaseManager:
                 remark TEXT,
                 create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(data_date)
+            )""",
+            """CREATE TABLE IF NOT EXISTS time_slot_configs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phase TEXT NOT NULL,
+                start_hour INTEGER NOT NULL,
+                end_hour INTEGER NOT NULL,
+                burst_factor REAL DEFAULT 1.0,
+                staff_ratio REAL DEFAULT 1.0,
+                create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS promotion_schemes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scheme_name TEXT NOT NULL,
+                traffic_factor REAL NOT NULL,
+                description TEXT,
+                create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS historical_schemes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scheme_name TEXT NOT NULL,
+                params_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                description TEXT,
+                create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )"""
         ]
 
@@ -115,6 +140,15 @@ class DatabaseManager:
         ]
         for idx_sql in indexes:
             cur.execute(idx_sql)
+
+        # Ensure all columns exist (for schema evolution)
+        try:
+            cur.execute("ALTER TABLE sys_shift ADD COLUMN rest_hours REAL DEFAULT 0.0")
+        except: pass
+        
+        try:
+            cur.execute("ALTER TABLE history_biz_data ADD COLUMN conversion_rate REAL DEFAULT 0.0")
+        except: pass
 
         conn.commit()
         conn.close()
