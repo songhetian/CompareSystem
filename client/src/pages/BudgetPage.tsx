@@ -13,6 +13,7 @@ import { TimelineChart, HourlyChart, PieChart, RadarChart } from '../components/
 import { DataTable } from '../components/DataTable';
 import { InlineLoading } from '../components/LoadingScreen';
 import { IconHistory } from '@arco-design/web-react/icon';
+import { Line } from 'react-chartjs-2';
 import dayjs from 'dayjs';
 import ExcelJS from 'exceljs';
 import {
@@ -122,6 +123,10 @@ export const BudgetPage = () => {
 
   // 历史数据参考
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [historyProjects, setHistoryProjects] = useState<HistoryProject[]>([]);
+  const [selectedHistoryProject, setSelectedHistoryProject] = useState<number | null>(null);
+  const [projectHistoryData, setProjectHistoryData] = useState<HistoryDataRecord[]>([]);
+  const [showHistoryChart, setShowHistoryChart] = useState(false);
 
   // 拖拽传感器
   const sensors = useSensors(
@@ -134,7 +139,14 @@ export const BudgetPage = () => {
   useEffect(() => {
     loadData();
     loadSavedResults();
+    loadHistoryProjects();
   }, []);
+
+  useEffect(() => {
+    if (selectedHistoryProject) {
+      loadProjectHistoryData(selectedHistoryProject);
+    }
+  }, [selectedHistoryProject]);
 
   const loadData = async () => {
     setDataLoading(true);
@@ -162,6 +174,298 @@ export const BudgetPage = () => {
     } finally {
       setDataLoading(false);
     }
+  };
+
+  const loadHistoryProjects = async () => {
+    try {
+      if (window.api.getHistoryProjects) {
+        const projects = await window.api.getHistoryProjects();
+        setHistoryProjects(projects);
+      }
+    } catch (err) {
+      console.error('加载历史项目失败:', err);
+    }
+  };
+
+  const loadProjectHistoryData = async (projectId: number) => {
+    try {
+      if (window.api.getHistoryData) {
+        const data = await window.api.getHistoryData(projectId, 90);
+        setProjectHistoryData(data);
+      }
+    } catch (err) {
+      console.error('加载项目历史数据失败:', err);
+      Message.error('加载历史数据失败');
+    }
+  };
+
+  const calculateHistoryStats = (data: HistoryDataRecord[]) => {
+    if (data.length === 0) return null;
+
+    const avgSales = data.reduce((sum, d) => sum + (d.sales_volume || 0), 0) / data.length;
+    const avgStaff = data.reduce((sum, d) => sum + (d.actual_staff || 0), 0) / data.length;
+    const avgConsult = data.reduce((sum, d) => sum + (d.actual_consult || 0), 0) / data.length;
+    const avgConversion = data.reduce((sum, d) => sum + (d.conversion_rate || 0), 0) / data.length;
+    const avgEfficiency = data.filter(d => d.actual_staff > 0)
+      .reduce((sum, d) => sum + (d.sales_volume / d.actual_staff), 0) / data.filter(d => d.actual_staff > 0).length;
+
+    // 计算数据波动率（标准差）
+    const efficiencies = data.filter(d => d.actual_staff > 0).map(d => d.sales_volume / d.actual_staff);
+    const variance = efficiencies.reduce((sum, eff) => sum + Math.pow(eff - avgEfficiency, 2), 0) / efficiencies.length;
+    const stdDev = Math.sqrt(variance);
+    const coefficientOfVariation = stdDev / avgEfficiency;
+
+    // 计算置信度
+    let confidence = 100;
+
+    // 数据量因素
+    if (data.length < 30) confidence -= 20;
+    if (data.length < 10) confidence -= 30;
+
+    // 波动性因素（变异系数）
+    if (coefficientOfVariation > 0.3) confidence -= 15;
+    if (coefficientOfVariation > 0.5) confidence -= 25;
+
+    // 数据完整性因素
+    const completeness = data.filter(d => d.actual_staff > 0).length / data.length;
+    if (completeness < 0.8) confidence -= 10;
+    if (completeness < 0.6) confidence -= 20;
+
+    confidence = Math.max(confidence, 30); // 最低30%
+
+    // 检测异常数据
+    const anomalies = data.filter(d => {
+      if (d.actual_staff === 0) return false;
+      const efficiency = d.sales_volume / d.actual_staff;
+      const zScore = Math.abs((efficiency - avgEfficiency) / stdDev);
+      return zScore > 2.5; // 超过2.5个标准差视为异常
+    });
+
+    return {
+      avgSales: avgSales.toFixed(1),
+      avgStaff: Math.round(avgStaff),
+      avgConsult: Math.round(avgConsult),
+      avgConversion: (avgConversion * 100).toFixed(2),
+      avgEfficiency: avgEfficiency.toFixed(2),
+      confidence: Math.round(confidence),
+      anomalies: anomalies.length,
+      stdDev: stdDev.toFixed(2),
+      predictedStaff: (targetValue: number) => Math.ceil(targetValue / avgEfficiency)
+    };
+  };
+
+  const getHistoryChartData = () => {
+    if (projectHistoryData.length === 0) return null;
+
+    // 按日期排序
+    const sortedData = [...projectHistoryData].sort((a, b) =>
+      new Date(a.data_date).getTime() - new Date(b.data_date).getTime()
+    );
+
+    const labels = sortedData.map(d => d.data_date);
+    const salesData = sortedData.map(d => d.sales_volume);
+    const staffData = sortedData.map(d => d.actual_staff);
+    const efficiencyData = sortedData.map(d =>
+      d.actual_staff > 0 ? (d.sales_volume / d.actual_staff) : 0
+    );
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: '销售额(万)',
+          data: salesData,
+          borderColor: '#1890ff',
+          backgroundColor: 'rgba(24, 144, 255, 0.1)',
+          yAxisID: 'y',
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: '人数',
+          data: staffData,
+          borderColor: '#ff7d00',
+          backgroundColor: 'rgba(255, 125, 0, 0.1)',
+          yAxisID: 'y1',
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: '人均效率(万/人)',
+          data: efficiencyData,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          yAxisID: 'y2',
+          tension: 0.4,
+          fill: true
+        }
+      ]
+    };
+  };
+
+  const historyChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: '历史业务趋势分析'
+      },
+    },
+    scales: {
+      y: {
+        type: 'linear' as const,
+        display: true,
+        position: 'left' as const,
+        title: {
+          display: true,
+          text: '销售额(万)'
+        }
+      },
+      y1: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        title: {
+          display: true,
+          text: '人数'
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+      },
+      y2: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        title: {
+          display: true,
+          text: '效率(万/人)'
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+      }
+    },
+  };
+
+  const applyHistoryPrediction = () => {
+    if (!selectedHistoryProject || projectHistoryData.length === 0) {
+      Message.warning('请先选择项目并确保有历史数据');
+      return;
+    }
+
+    const stats = calculateHistoryStats(projectHistoryData);
+    if (!stats) return;
+
+    if (formData.driveMode === 'sales' && formData.targetValue) {
+      const predicted = stats.predictedStaff(Number(formData.targetValue));
+
+      // 置信度颜色
+      const getConfidenceColor = (conf: number) => {
+        if (conf >= 80) return '#10b981';
+        if (conf >= 60) return '#f59e0b';
+        return '#ef4444';
+      };
+
+      // 置信度描述
+      const getConfidenceDesc = (conf: number) => {
+        if (conf >= 80) return '高置信度 - 预测结果可靠';
+        if (conf >= 60) return '中等置信度 - 建议结合业务判断';
+        return '低置信度 - 建议谨慎参考';
+      };
+
+      Modal.info({
+        title: '📊 智能预测结果',
+        style: { width: 700 },
+        content: (
+          <div>
+            <p style={{ marginBottom: 12 }}>基于 <strong>{projectHistoryData.length}</strong> 条历史数据分析：</p>
+
+            {/* 置信度评分 */}
+            <div style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              padding: 16,
+              borderRadius: 12,
+              marginBottom: 16,
+              color: 'white'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 14, opacity: 0.9 }}>预测置信度</div>
+                  <div style={{ fontSize: 42, fontWeight: 'bold', marginTop: 4 }}>
+                    {stats.confidence}%
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                    {getConfidenceDesc(stats.confidence)}
+                  </div>
+                </div>
+                <div style={{ fontSize: 64 }}>
+                  {stats.confidence >= 80 ? '🎯' : stats.confidence >= 60 ? '⚠️' : '❗'}
+                </div>
+              </div>
+            </div>
+
+            {/* 历史统计 */}
+            <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, marginBottom: 12 }}>
+              <p style={{ fontWeight: 'bold', marginBottom: 8 }}>📈 历史数据统计</p>
+              <p>• 平均销售额: <strong>{stats.avgSales}</strong> 万元</p>
+              <p>• 平均人数: <strong>{stats.avgStaff}</strong> 人</p>
+              <p>• 人均效率: <strong>{stats.avgEfficiency}</strong> 万元/人 (标准差: ±{stats.stdDev})</p>
+              <p>• 平均咨询量: <strong>{stats.avgConsult}</strong> 次</p>
+              <p>• 平均转化率: <strong>{stats.avgConversion}%</strong></p>
+              {stats.anomalies > 0 && (
+                <p style={{ color: '#ef4444', marginTop: 8 }}>
+                  ⚠️ 检测到 <strong>{stats.anomalies}</strong> 条异常数据（偏离平均值超过2.5个标准差）
+                </p>
+              )}
+            </div>
+
+            {/* 预测结果 */}
+            <div style={{ background: '#e6f7ff', padding: 16, borderRadius: 8, border: '1px solid #91d5ff' }}>
+              <p style={{ fontSize: 16, fontWeight: 'bold', color: '#0050b3' }}>
+                💡 预测人力需求: <span style={{ fontSize: 24, color: '#1890ff' }}>{predicted}</span> 人
+              </p>
+              <p style={{ color: '#666', marginTop: 8, fontSize: 12 }}>
+                基于目标销售额 {formData.targetValue} 万元 ÷ 人均效率 {stats.avgEfficiency} 万元/人
+              </p>
+              <p style={{ color: '#666', marginTop: 4, fontSize: 12 }}>
+                建议配置范围: {Math.ceil(predicted * 0.9)} - {Math.ceil(predicted * 1.1)} 人
+              </p>
+            </div>
+
+            {/* 数据质量提示 */}
+            {stats.confidence < 70 && (
+              <div style={{
+                background: '#fff7e6',
+                padding: 12,
+                borderRadius: 8,
+                marginTop: 12,
+                border: '1px solid #ffd591'
+              }}>
+                <p style={{ fontSize: 13, color: '#ad6800', margin: 0 }}>
+                  <strong>💡 提高置信度建议：</strong><br/>
+                  {projectHistoryData.length < 30 && '• 继续积累历史数据（建议至少30天）\n'}
+                  {stats.anomalies > 0 && '• 检查并处理异常数据\n'}
+                  • 确保数据记录的完整性和准确性
+                </p>
+              </div>
+            )}
+          </div>
+        )
+      });
+    } else {
+      Message.success(`历史平均销售额: ${stats.avgSales}万元, 平均人数: ${stats.avgStaff}人`);
+    }
+
+    setHistoryModalVisible(false);
   };
 
   const loadSavedResults = () => {
@@ -473,46 +777,275 @@ export const BudgetPage = () => {
         <div className='max-w-7xl mx-auto'>
 
           <Modal
-            title="📥 参考历史数据"
+            title={
+              <Space>
+                <IconHistory />
+                <Text bold>📊 参考历史数据与智能预测</Text>
+              </Space>
+            }
             visible={historyModalVisible}
             onCancel={() => setHistoryModalVisible(false)}
-            footer={null}
-            style={{ width: 800 }}
+            footer={
+              <Space>
+                <Button onClick={() => setHistoryModalVisible(false)}>取消</Button>
+                <Button
+                  type="primary"
+                  onClick={applyHistoryPrediction}
+                  disabled={!selectedHistoryProject || projectHistoryData.length === 0}
+                >
+                  智能预测人力需求
+                </Button>
+              </Space>
+            }
+            style={{ width: 900, top: 40 }}
           >
-            <div className="mb-4">
-              <Text type="secondary">点击【应用】将该条历史数据的核心指标作为当前测算基准。</Text>
-            </div>
-            <Table
-              data={historyData}
-              pagination={{ pageSize: 5 }}
-              columns={[
-                { title: '日期', dataIndex: 'data_date' },
-                { title: '销售额(万)', dataIndex: 'sales_volume' },
-                { title: '咨询量', dataIndex: 'actual_consult' },
-                { title: '转化率', dataIndex: 'conversion_rate', render: (val: number) => `${(val * 100).toFixed(1)}%` },
-                {
-                  title: '操作',
-                  render: (_: any, record: HistoryDataRecord) => (
-                    <Button
-                      type="primary"
-                      size="small"
-                      onClick={() => {
-                        if (formData.driveMode === 'sales') {
-                          updateFormData('targetValue', record.sales_volume.toString());
-                        } else {
-                          // 如果是访客数驱动，此处简易使用咨询量作为替代或按需转换
-                          updateFormData('targetValue', record.actual_consult.toString());
+            <div className="space-y-4">
+              {/* 项目选择 */}
+              <div>
+                <Text bold className="block mb-2">选择历史项目</Text>
+                <Select
+                  placeholder="选择要参考的项目/店铺"
+                  value={selectedHistoryProject || undefined}
+                  onChange={(v) => setSelectedHistoryProject(v)}
+                  size="large"
+                  style={{ width: '100%' }}
+                  allowClear
+                >
+                  {historyProjects.map(p => (
+                    <Select.Option key={p.id} value={p.id}>
+                      <Space>
+                        📁 {p.project_name}
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {p.description || ''}
+                        </Text>
+                      </Space>
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+
+              {/* 统计信息 */}
+              {selectedHistoryProject && projectHistoryData.length > 0 && (() => {
+                const stats = calculateHistoryStats(projectHistoryData);
+                if (!stats) return null;
+
+                return (
+                  <div>
+                    <Text bold className="block mb-3">历史数据统计 ({projectHistoryData.length} 条记录)</Text>
+                    <div className="grid grid-cols-5 gap-3">
+                      <Card style={{ textAlign: 'center', background: '#f0f9ff' }}>
+                        <Statistic
+                          title="平均销售额"
+                          value={stats.avgSales}
+                          suffix="万"
+                          styleValue={{ fontSize: 18, color: '#1890ff' }}
+                        />
+                      </Card>
+                      <Card style={{ textAlign: 'center', background: '#fff7ed' }}>
+                        <Statistic
+                          title="平均人数"
+                          value={stats.avgStaff}
+                          suffix="人"
+                          styleValue={{ fontSize: 18, color: '#ff7d00' }}
+                        />
+                      </Card>
+                      <Card style={{ textAlign: 'center', background: '#f0fdf4' }}>
+                        <Statistic
+                          title="人均效率"
+                          value={stats.avgEfficiency}
+                          suffix="万/人"
+                          styleValue={{ fontSize: 18, color: '#10b981' }}
+                        />
+                      </Card>
+                      <Card style={{ textAlign: 'center', background: '#fef3f2' }}>
+                        <Statistic
+                          title="平均咨询量"
+                          value={stats.avgConsult}
+                          suffix="次"
+                          styleValue={{ fontSize: 18, color: '#ef4444' }}
+                        />
+                      </Card>
+                      <Card style={{ textAlign: 'center', background: '#faf5ff' }}>
+                        <Statistic
+                          title="平均转化率"
+                          value={stats.avgConversion}
+                          suffix="%"
+                          styleValue={{ fontSize: 18, color: '#a855f7' }}
+                        />
+                      </Card>
+                    </div>
+
+                    {/* 预测结果 */}
+                    {formData.targetValue && formData.driveMode === 'sales' && (
+                      <div className="mt-4 p-4 rounded-lg" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14 }}>基于历史效率的智能预测</Text>
+                            <div style={{ fontSize: 28, fontWeight: 'bold', marginTop: 4 }}>
+                              约需 {stats.predictedStaff(Number(formData.targetValue))} 人
+                            </div>
+                            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 4 }}>
+                              {formData.targetValue}万 ÷ {stats.avgEfficiency}万/人 = {stats.predictedStaff(Number(formData.targetValue))}人
+                            </Text>
+                            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{
+                                background: 'rgba(255,255,255,0.2)',
+                                padding: '4px 12px',
+                                borderRadius: 12,
+                                fontSize: 13
+                              }}>
+                                置信度: {stats.confidence}%
+                              </div>
+                              {stats.anomalies > 0 && (
+                                <div style={{
+                                  background: 'rgba(255,152,0,0.3)',
+                                  padding: '4px 12px',
+                                  borderRadius: 12,
+                                  fontSize: 13
+                                }}>
+                                  ⚠️ {stats.anomalies}条异常
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 48 }}>🎯</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 趋势图按钮 */}
+                    <div className="mt-4">
+                      <Button
+                        type="dashed"
+                        long
+                        onClick={() => setShowHistoryChart(!showHistoryChart)}
+                        icon={<IconHistory />}
+                      >
+                        {showHistoryChart ? '隐藏' : '查看'}趋势图分析
+                      </Button>
+                    </div>
+
+                    {/* 趋势图 */}
+                    {showHistoryChart && getHistoryChartData() && (
+                      <div style={{ height: 350, marginTop: 16, background: '#fafafa', padding: 16, borderRadius: 8 }}>
+                        <Line data={getHistoryChartData()!} options={historyChartOptions} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* 数据表格 */}
+              {selectedHistoryProject && projectHistoryData.length > 0 && (
+                <div>
+                  <Text bold className="block mb-2">历史数据明细（最近90天）</Text>
+                  <Table
+                    data={projectHistoryData}
+                    pagination={{ pageSize: 5 }}
+                    size="small"
+                    columns={[
+                      {
+                        title: '日期',
+                        dataIndex: 'data_date',
+                        width: 110,
+                        sorter: (a: HistoryDataRecord, b: HistoryDataRecord) =>
+                          new Date(a.data_date).getTime() - new Date(b.data_date).getTime()
+                      },
+                      {
+                        title: '销售额(万)',
+                        dataIndex: 'sales_volume',
+                        width: 100,
+                        render: (val: number) => val?.toFixed(1) || '-'
+                      },
+                      {
+                        title: '人数',
+                        dataIndex: 'actual_staff',
+                        width: 70
+                      },
+                      {
+                        title: '咨询量',
+                        dataIndex: 'actual_consult',
+                        width: 90,
+                        render: (val: number) => Math.round(val) || '-'
+                      },
+                      {
+                        title: '转化率',
+                        dataIndex: 'conversion_rate',
+                        width: 80,
+                        render: (val: number) => val ? `${(val * 100).toFixed(1)}%` : '-'
+                      },
+                      {
+                        title: '人均效率',
+                        width: 100,
+                        render: (_: any, record: HistoryDataRecord) => {
+                          if (!record.sales_volume || !record.actual_staff) return '-';
+                          const efficiency = record.sales_volume / record.actual_staff;
+
+                          // 检查是否为异常数据
+                          const stats = calculateHistoryStats(projectHistoryData);
+                          if (stats) {
+                            const avgEff = parseFloat(stats.avgEfficiency);
+                            const stdDev = parseFloat(stats.stdDev);
+                            const zScore = Math.abs((efficiency - avgEff) / stdDev);
+
+                            if (zScore > 2.5) {
+                              return (
+                                <Tooltip content="异常数据：偏离平均值超过2.5个标准差">
+                                  <Tag color="orange" size="small">
+                                    {efficiency.toFixed(2)}万/人 ⚠️
+                                  </Tag>
+                                </Tooltip>
+                              );
+                            }
+                          }
+
+                          return efficiency.toFixed(2) + '万/人';
                         }
-                        setHistoryModalVisible(false);
-                        Message.success(`已应用 ${record.data_date} 的历史数据`);
-                      }}
-                    >
-                      应用
-                    </Button>
-                  )
-                }
-              ]}
-            />
+                      },
+                      {
+                        title: '操作',
+                        width: 80,
+                        fixed: 'right' as const,
+                        render: (_: any, record: HistoryDataRecord) => (
+                          <Button
+                            type="text"
+                            size="small"
+                            onClick={() => {
+                              updateFormData('targetValue', record.sales_volume.toString());
+                              Message.success(`已应用 ${record.data_date} 的销售额数据`);
+                            }}
+                          >
+                            应用
+                          </Button>
+                        )
+                      }
+                    ]}
+                  />
+                </div>
+              )}
+
+              {/* 空状态 */}
+              {selectedHistoryProject && projectHistoryData.length === 0 && (
+                <Empty description="该项目暂无历史数据" />
+              )}
+
+              {!selectedHistoryProject && (
+                <Empty
+                  description="请选择一个项目查看历史数据"
+                  icon={<div style={{ fontSize: 64 }}>📊</div>}
+                />
+              )}
+
+              {/* 提示信息 */}
+              <div className="p-3 rounded-lg" style={{ background: '#f0f9ff', border: '1px solid #bae7ff' }}>
+                <Text style={{ fontSize: 13, color: '#0050b3' }}>
+                  <strong>💡 使用提示：</strong><br />
+                  • 选择项目后，系统会自动计算历史平均效率<br />
+                  • 点击"智能预测"可基于历史数据预测人力需求<br />
+                  • 点击表格中的"应用"可快速填入该天的销售额
+                </Text>
+              </div>
+            </div>
           </Modal>
 
           {/* 步骤 1: 目标设定 */}

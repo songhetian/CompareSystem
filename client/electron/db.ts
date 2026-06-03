@@ -7,7 +7,7 @@ export class DBManager {
   private _db: Database.Database;
 
   // 暴露 db 实例用于事务操作
-  public get db() {
+  public get db(): Database.Database {
     return this._db;
   }
 

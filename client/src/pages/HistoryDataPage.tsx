@@ -5,10 +5,11 @@ import {
 } from '@arco-design/web-react';
 import {
   IconDownload, IconUpload, IconDelete, IconRefresh,
-  IconPlus, IconEdit, IconBarChart, IconFolderAdd
+  IconPlus, IconEdit, IconHistory, IconFolderAdd
 } from '@arco-design/web-react/icon';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
+import weekOfYear from 'dayjs/plugin/weekOfYear';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -21,6 +22,8 @@ import {
   Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+
+dayjs.extend(weekOfYear);
 
 ChartJS.register(
   CategoryScale,
@@ -50,6 +53,11 @@ export const HistoryDataPage = () => {
 
   // 图表相关状态
   const [chartVisible, setChartVisible] = useState(false);
+
+  // 同比/环比分析相关状态
+  const [yoyMomModalVisible, setYoyMomModalVisible] = useState(false);
+  const [analysisType, setAnalysisType] = useState<'yoy' | 'mom'>('yoy');
+  const [analysisPeriod, setAnalysisPeriod] = useState<'week' | 'month'>('month');
 
   useEffect(() => {
     loadProjects();
@@ -489,6 +497,291 @@ export const HistoryDataPage = () => {
       : '0'
   };
 
+  // ==================== 同比/环比分析核心算法 ====================
+
+  // 类型定义
+  interface PeriodData {
+    period: string;
+    year: number;
+    periodNum: number; // 月份(1-12)或周数(1-53)
+    avgSales: number;
+    avgStaff: number;
+    avgEfficiency: number;
+    recordCount: number;
+  }
+
+  interface GrowthComparison {
+    period: string;
+    currentSales: number;
+    currentStaff: number;
+    currentEfficiency: number;
+    previousSales: number;
+    previousStaff: number;
+    previousEfficiency: number;
+    salesGrowth: number;
+    staffGrowth: number;
+    efficiencyGrowth: number;
+  }
+
+  // 数据分组和聚合
+  const groupDataByPeriod = (records: HistoryDataRecord[], period: 'week' | 'month'): Map<string, HistoryDataRecord[]> => {
+    const map = new Map<string, HistoryDataRecord[]>();
+
+    records.forEach(record => {
+      const date = dayjs(record.data_date);
+      const key = period === 'month'
+        ? date.format('YYYY-MM')
+        : date.format('YYYY-[W]WW');
+
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key)!.push(record);
+    });
+
+    return map;
+  };
+
+  // 计算周期平均值
+  const calculatePeriodAverages = (periodMap: Map<string, HistoryDataRecord[]>, period: 'week' | 'month'): PeriodData[] => {
+    const periods: PeriodData[] = [];
+
+    periodMap.forEach((records, key) => {
+      const validRecords = records.filter(r => r.actual_staff > 0);
+      if (validRecords.length === 0) return;
+
+      const avgSales = records.reduce((sum, r) => sum + (r.sales_volume || 0), 0) / records.length;
+      const avgStaff = records.reduce((sum, r) => sum + (r.actual_staff || 0), 0) / records.length;
+      const avgEfficiency = validRecords.reduce((sum, r) =>
+        sum + (r.sales_volume || 0) / (r.actual_staff || 1), 0
+      ) / validRecords.length;
+
+      // 解析周期信息
+      let year: number;
+      let periodNum: number;
+
+      if (period === 'month') {
+        const [yearStr, monthStr] = key.split('-');
+        year = parseInt(yearStr);
+        periodNum = parseInt(monthStr);
+      } else {
+        // 格式: 2026-W10
+        const match = key.match(/(\d{4})-W(\d{2})/);
+        if (match) {
+          year = parseInt(match[1]);
+          periodNum = parseInt(match[2]);
+        } else {
+          return;
+        }
+      }
+
+      periods.push({
+        period: key,
+        year,
+        periodNum,
+        avgSales,
+        avgStaff,
+        avgEfficiency,
+        recordCount: records.length
+      });
+    });
+
+    return periods.sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.periodNum - b.periodNum;
+    });
+  };
+
+  // 同比计算 (Year-over-Year)
+  const calculateYoY = (): GrowthComparison[] => {
+    if (data.length < 14) return [];
+
+    const periodMap = groupDataByPeriod(data, analysisPeriod);
+    const periods = calculatePeriodAverages(periodMap, analysisPeriod);
+
+    const comparisons: GrowthComparison[] = [];
+
+    periods.forEach(current => {
+      // 查找去年同期数据
+      const lastYear = periods.find(p =>
+        p.year === current.year - 1 &&
+        p.periodNum === current.periodNum
+      );
+
+      if (lastYear) {
+        comparisons.push({
+          period: current.period,
+          currentSales: current.avgSales,
+          currentStaff: current.avgStaff,
+          currentEfficiency: current.avgEfficiency,
+          previousSales: lastYear.avgSales,
+          previousStaff: lastYear.avgStaff,
+          previousEfficiency: lastYear.avgEfficiency,
+          salesGrowth: lastYear.avgSales > 0
+            ? ((current.avgSales - lastYear.avgSales) / lastYear.avgSales * 100)
+            : 0,
+          staffGrowth: lastYear.avgStaff > 0
+            ? ((current.avgStaff - lastYear.avgStaff) / lastYear.avgStaff * 100)
+            : 0,
+          efficiencyGrowth: lastYear.avgEfficiency > 0
+            ? ((current.avgEfficiency - lastYear.avgEfficiency) / lastYear.avgEfficiency * 100)
+            : 0
+        });
+      }
+    });
+
+    return comparisons;
+  };
+
+  // 环比计算 (Month-over-Month / Week-over-Week)
+  const calculateMoM = (): GrowthComparison[] => {
+    if (data.length < 7) return [];
+
+    const periodMap = groupDataByPeriod(data, analysisPeriod);
+    const periods = calculatePeriodAverages(periodMap, analysisPeriod);
+
+    if (periods.length < 2) return [];
+
+    const comparisons: GrowthComparison[] = [];
+
+    for (let i = 1; i < periods.length; i++) {
+      const current = periods[i];
+      const previous = periods[i - 1];
+
+      comparisons.push({
+        period: current.period,
+        currentSales: current.avgSales,
+        currentStaff: current.avgStaff,
+        currentEfficiency: current.avgEfficiency,
+        previousSales: previous.avgSales,
+        previousStaff: previous.avgStaff,
+        previousEfficiency: previous.avgEfficiency,
+        salesGrowth: previous.avgSales > 0
+          ? ((current.avgSales - previous.avgSales) / previous.avgSales * 100)
+          : 0,
+        staffGrowth: previous.avgStaff > 0
+          ? ((current.avgStaff - previous.avgStaff) / previous.avgStaff * 100)
+          : 0,
+        efficiencyGrowth: previous.avgEfficiency > 0
+          ? ((current.avgEfficiency - previous.avgEfficiency) / previous.avgEfficiency * 100)
+          : 0
+      });
+    }
+
+    return comparisons;
+  };
+
+  // 获取分析数据
+  const getAnalysisData = (): GrowthComparison[] => {
+    return analysisType === 'yoy' ? calculateYoY() : calculateMoM();
+  };
+
+  // 显示同比/环比分析
+  const showYoyMomAnalysis = () => {
+    if (!currentProject || data.length < 14) {
+      Message.warning('数据不足，至少需要14天的数据才能进行分析');
+      return;
+    }
+    setYoyMomModalVisible(true);
+  };
+
+  // 获取同比/环比图表数据
+  const getYoyMomChartData = () => {
+    const analysisData = getAnalysisData();
+    if (analysisData.length === 0) return null;
+
+    return {
+      labels: analysisData.map(d => d.period),
+      datasets: [
+        {
+          label: '销售额增长率(%)',
+          data: analysisData.map(d => d.salesGrowth),
+          borderColor: 'rgb(54, 162, 235)',
+          backgroundColor: 'rgba(54, 162, 235, 0.1)',
+          tension: 0.4,
+          fill: false
+        },
+        {
+          label: '人数增长率(%)',
+          data: analysisData.map(d => d.staffGrowth),
+          borderColor: 'rgb(255, 159, 64)',
+          backgroundColor: 'rgba(255, 159, 64, 0.1)',
+          tension: 0.4,
+          fill: false
+        },
+        {
+          label: '效率增长率(%)',
+          data: analysisData.map(d => d.efficiencyGrowth),
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.1)',
+          tension: 0.4,
+          fill: false
+        }
+      ]
+    };
+  };
+
+  const yoyMomChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: analysisType === 'yoy' ? '同比增长率分析' : '环比增长率分析'
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            label += context.parsed.y.toFixed(2) + '%';
+            return label;
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        title: {
+          display: true,
+          text: '增长率(%)'
+        },
+        ticks: {
+          callback: function(value: any) {
+            return value + '%';
+          }
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: analysisPeriod === 'month' ? '月份' : '周'
+        }
+      }
+    },
+  };
+
+  // 格式化增长率显示
+  const formatGrowth = (value: number) => {
+    const formatted = value.toFixed(2) + '%';
+    const icon = value > 0 ? '↑' : value < 0 ? '↓' : '→';
+    const color = value > 0 ? '#00b42a' : value < 0 ? '#f53f3f' : '#86909c';
+    return (
+      <Text style={{ color, fontWeight: 500 }}>
+        {icon} {formatted}
+      </Text>
+    );
+  };
+
   // ==================== 渲染 ====================
 
   return (
@@ -616,11 +909,19 @@ export const HistoryDataPage = () => {
             <Space>
               <Button
                 type='primary'
-                icon={<IconBarChart />}
+                icon={<IconHistory />}
                 onClick={showChart}
                 disabled={!currentProject || data.length === 0}
               >
                 趋势图
+              </Button>
+              <Button
+                type='primary'
+                status='success'
+                onClick={showYoyMomAnalysis}
+                disabled={!currentProject || data.length < 14}
+              >
+                📈 同比/环比
               </Button>
               <Button
                 icon={<IconDownload />}
@@ -802,7 +1103,7 @@ export const HistoryDataPage = () => {
 
       {/* 趋势图模态框 */}
       <Modal
-        title={<><IconBarChart /> 业务趋势分析</>}
+        title={<><IconHistory /> 业务趋势分析</>}
         visible={chartVisible}
         onCancel={() => setChartVisible(false)}
         footer={null}
@@ -822,6 +1123,262 @@ export const HistoryDataPage = () => {
             <strong>📊 图表说明：</strong> 三条曲线分别代表销售额、在岗人数和咨询量的变化趋势。
             通过观察曲线走势，可以分析业务高峰期、人力配置效率等关键指标。
           </Text>
+        </div>
+      </Modal>
+
+      {/* 同比/环比分析模态框 */}
+      <Modal
+        title={<><span style={{ fontSize: 20 }}>📈</span> 同比/环比数据分析</>}
+        visible={yoyMomModalVisible}
+        onCancel={() => setYoyMomModalVisible(false)}
+        footer={null}
+        style={{ width: 1400 }}
+      >
+        <div className='space-y-4'>
+          {/* 分析类型和周期选择 */}
+          <Card bordered={false} style={{ background: '#f7f8fa' }}>
+            <div className='grid grid-cols-2 gap-6'>
+              <div>
+                <Text bold style={{ display: 'block', marginBottom: 8 }}>分析类型</Text>
+                <Space>
+                  <Button
+                    type={analysisType === 'yoy' ? 'primary' : 'default'}
+                    onClick={() => setAnalysisType('yoy')}
+                    size='large'
+                  >
+                    ⚪ 同比 (YoY)
+                  </Button>
+                  <Button
+                    type={analysisType === 'mom' ? 'primary' : 'default'}
+                    onClick={() => setAnalysisType('mom')}
+                    size='large'
+                  >
+                    ⚪ 环比 (MoM)
+                  </Button>
+                </Space>
+              </div>
+              <div>
+                <Text bold style={{ display: 'block', marginBottom: 8 }}>统计周期</Text>
+                <Space>
+                  <Button
+                    type={analysisPeriod === 'month' ? 'primary' : 'default'}
+                    onClick={() => setAnalysisPeriod('month')}
+                    size='large'
+                  >
+                    ⚪ 按月
+                  </Button>
+                  <Button
+                    type={analysisPeriod === 'week' ? 'primary' : 'default'}
+                    onClick={() => setAnalysisPeriod('week')}
+                    size='large'
+                  >
+                    ⚪ 按周
+                  </Button>
+                </Space>
+              </div>
+            </div>
+          </Card>
+
+          {/* 说明卡片 */}
+          <Card
+            bordered={false}
+            style={{
+              background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
+              border: '1px solid #90caf9'
+            }}
+          >
+            <Text style={{ fontSize: 14, lineHeight: 1.8, color: '#01579b' }}>
+              <strong>💡 说明：</strong>
+              {analysisType === 'yoy' ? (
+                <>
+                  <strong>同比</strong>是指与去年同期相比，例如2026年1月与2025年1月对比。
+                  同比分析能够消除季节性因素影响，反映真实的年度增长趋势，适合评估长期业务发展。
+                </>
+              ) : (
+                <>
+                  <strong>环比</strong>是指与上一个周期相比，例如2月与1月对比，或第10周与第9周对比。
+                  环比分析能够快速响应短期变化，适合监控业务波动和及时调整运营策略。
+                </>
+              )}
+            </Text>
+          </Card>
+
+          {/* 增长率趋势图 */}
+          <Card bordered={false} title="增长率趋势图">
+            <div style={{ height: 400 }}>
+              {getYoyMomChartData() ? (
+                <Line data={getYoyMomChartData()!} options={yoyMomChartOptions} />
+              ) : (
+                <Empty description="暂无数据可分析" />
+              )}
+            </div>
+          </Card>
+
+          {/* 增长率数据明细表格 */}
+          <Card bordered={false} title="增长率数据明细">
+            {(() => {
+              const analysisData = getAnalysisData();
+              if (analysisData.length === 0) {
+                return <Empty description="暂无数据可分析" />;
+              }
+
+              const columns = [
+                {
+                  title: '周期',
+                  dataIndex: 'period',
+                  width: 120,
+                  render: (value: string) => (
+                    <Text bold style={{ fontSize: 14 }}>{value}</Text>
+                  )
+                },
+                {
+                  title: '销售额增长率',
+                  dataIndex: 'salesGrowth',
+                  width: 140,
+                  render: (value: number) => formatGrowth(value),
+                  sorter: (a: GrowthComparison, b: GrowthComparison) => a.salesGrowth - b.salesGrowth
+                },
+                {
+                  title: '人数增长率',
+                  dataIndex: 'staffGrowth',
+                  width: 140,
+                  render: (value: number) => formatGrowth(value),
+                  sorter: (a: GrowthComparison, b: GrowthComparison) => a.staffGrowth - b.staffGrowth
+                },
+                {
+                  title: '效率增长率',
+                  dataIndex: 'efficiencyGrowth',
+                  width: 140,
+                  render: (value: number) => formatGrowth(value),
+                  sorter: (a: GrowthComparison, b: GrowthComparison) => a.efficiencyGrowth - b.efficiencyGrowth
+                },
+                {
+                  title: '当前销售额',
+                  dataIndex: 'currentSales',
+                  width: 120,
+                  render: (value: number) => (
+                    <Text>{value.toFixed(1)}万</Text>
+                  )
+                },
+                {
+                  title: '当前人数',
+                  dataIndex: 'currentStaff',
+                  width: 100,
+                  render: (value: number) => (
+                    <Text>{value.toFixed(1)}人</Text>
+                  )
+                },
+                {
+                  title: '当前效率',
+                  dataIndex: 'currentEfficiency',
+                  width: 120,
+                  render: (value: number) => (
+                    <Text>{value.toFixed(2)}万/人</Text>
+                  )
+                },
+                {
+                  title: analysisType === 'yoy' ? '去年同期销售额' : '上期销售额',
+                  dataIndex: 'previousSales',
+                  width: 140,
+                  render: (value: number) => (
+                    <Text type='secondary'>{value.toFixed(1)}万</Text>
+                  )
+                },
+                {
+                  title: analysisType === 'yoy' ? '去年同期人数' : '上期人数',
+                  dataIndex: 'previousStaff',
+                  width: 130,
+                  render: (value: number) => (
+                    <Text type='secondary'>{value.toFixed(1)}人</Text>
+                  )
+                },
+                {
+                  title: analysisType === 'yoy' ? '去年同期效率' : '上期效率',
+                  dataIndex: 'previousEfficiency',
+                  width: 140,
+                  render: (value: number) => (
+                    <Text type='secondary'>{value.toFixed(2)}万/人</Text>
+                  )
+                }
+              ];
+
+              return (
+                <Table
+                  columns={columns}
+                  data={analysisData}
+                  pagination={false}
+                  scroll={{ x: 1300 }}
+                  stripe
+                />
+              );
+            })()}
+          </Card>
+
+          {/* 数据洞察 */}
+          <Card
+            bordered={false}
+            style={{
+              background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)',
+              border: '1px solid #ce93d8'
+            }}
+          >
+            <Text bold style={{ display: 'block', marginBottom: 8, fontSize: 14, color: '#4a148c' }}>
+              📊 数据洞察
+            </Text>
+            <div style={{ fontSize: 13, lineHeight: 2, color: '#6a1b9a' }}>
+              {(() => {
+                const analysisData = getAnalysisData();
+                if (analysisData.length === 0) return <Text>暂无数据</Text>;
+
+                const avgSalesGrowth = analysisData.reduce((sum, d) => sum + d.salesGrowth, 0) / analysisData.length;
+                const avgStaffGrowth = analysisData.reduce((sum, d) => sum + d.staffGrowth, 0) / analysisData.length;
+                const avgEfficiencyGrowth = analysisData.reduce((sum, d) => sum + d.efficiencyGrowth, 0) / analysisData.length;
+
+                const insights = [];
+
+                // 销售额趋势
+                if (avgSalesGrowth > 10) {
+                  insights.push('• 销售额保持强劲增长，业务发展良好 ✨');
+                } else if (avgSalesGrowth > 0) {
+                  insights.push('• 销售额平稳增长，整体趋势健康 ✓');
+                } else {
+                  insights.push('• 销售额出现下滑，需要关注业务情况 ⚠️');
+                }
+
+                // 效率分析
+                if (avgEfficiencyGrowth > 5) {
+                  insights.push('• 人效持续提升，运营效率优秀 🎯');
+                } else if (avgEfficiencyGrowth > 0) {
+                  insights.push('• 人效稳步提升，运营管理良好 ✓');
+                } else if (avgEfficiencyGrowth > -5) {
+                  insights.push('• 人效略有下降，建议优化人员配置 ⚠️');
+                } else {
+                  insights.push('• 人效明显下降，需要立即调查原因并改进 ❗');
+                }
+
+                // 人数与销售额匹配度
+                if (avgSalesGrowth > avgStaffGrowth + 5) {
+                  insights.push('• 效率驱动型增长，人力投入产出比高 ⭐');
+                } else if (avgStaffGrowth > avgSalesGrowth + 5) {
+                  insights.push('• 人力增长快于销售增长，存在人员冗余风险 ⚠️');
+                }
+
+                // 增长稳定性
+                const salesGrowthStd = Math.sqrt(
+                  analysisData.reduce((sum, d) => sum + Math.pow(d.salesGrowth - avgSalesGrowth, 2), 0) / analysisData.length
+                );
+                if (salesGrowthStd < 5) {
+                  insights.push('• 增长率波动较小，业务稳定性好 ✓');
+                } else if (salesGrowthStd > 15) {
+                  insights.push('• 增长率波动较大，建议分析波动原因 ℹ️');
+                }
+
+                return insights.map((insight, index) => (
+                  <div key={index}>{insight}</div>
+                ));
+              })()}
+            </div>
+          </Card>
         </div>
       </Modal>
     </div>

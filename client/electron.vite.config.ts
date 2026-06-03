@@ -1,40 +1,42 @@
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
-import react from '@vitejs/plugin-react-swc'
-import { resolve } from 'path'
+import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import react from '@vitejs/plugin-react-swc';
+import { resolve } from 'path';
 
 export default defineConfig({
   main: {
+    plugins: [externalizeDepsPlugin()],
     build: {
-      lib: {
-        entry: 'electron/index.ts'
-      },
       rollupOptions: {
-        external: ['better-sqlite3']
+        input: {
+          index: resolve(__dirname, 'electron/index.ts')
+        }
       }
-    },
-    plugins: [externalizeDepsPlugin()]
+    }
   },
   preload: {
+    plugins: [externalizeDepsPlugin()],
     build: {
-      lib: {
-        entry: 'electron/preload.ts'
+      rollupOptions: {
+        input: {
+          preload: resolve(__dirname, 'electron/preload.ts')
+        }
       }
-    },
-    plugins: [externalizeDepsPlugin()]
+    }
   },
   renderer: {
     root: '.',
     build: {
       rollupOptions: {
-        input: resolve(__dirname, 'index.html')
+        input: {
+          index: resolve(__dirname, 'index.html')
+        }
       }
     },
     resolve: {
       alias: {
-        '@': resolve(__dirname, 'src'),
         '@renderer': resolve(__dirname, 'src')
       }
     },
     plugins: [react()]
   }
-})
+});

@@ -1,9 +1,16 @@
 {
   "compilerOptions": {
-    "composite": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true
   },
-  "include": ["electron.vite.config.ts"]
+  "include": [
+    "electron/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
