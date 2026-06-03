@@ -211,8 +211,8 @@ export const ParamPage = () => {
       params: [
         { key: 'avg_order_value',  label: '平均客单价',  min: 1,  max: 100000,  step: 10,   unit: '元',  default: 160 },
         { key: 'daily_visitors',   label: '日均访客数',  min: 100, max: 100000, step: 100,  unit: '人',  default: 3800 },
-        { key: 'peak_factor',      label: '小时峰值系数', min: 1.0, max: 3.0,   step: 0.1,  unit: '',    default: 1.4, description: '全天最忙小时话务量 / 全天平均每小时话务量' },
-        { key: 'safety_buffer',    label: '安全冗余',    min: 1.0, max: 2.0,   step: 0.05, unit: '',    default: 1.15, description: '应对突发流量的预留人力倍数' },
+        { key: 'peak_factor',      label: '高峰系数',    min: 1.0, max: 2.0,   step: 0.1,  unit: '',    default: 1.2 },
+        { key: 'safety_buffer',    label: '安全冗余',    min: 1.0, max: 2.0,   step: 0.05, unit: '',    default: 1.15 },
       ]
     },
     {
@@ -229,66 +229,33 @@ export const ParamPage = () => {
       title: '岗位效能', icon: '⚡', color: '#10b981',
       params: [
         { key: 'presale_handle_time',   label: '售前处理时长', min: 1,   max: 15,  step: 0.5,  unit: '分钟', default: 4.5 },
-        { key: 'presale_saturation',    label: '售前饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.78, description: '客服实际处于服务状态的时间占比' },
+        { key: 'presale_saturation',    label: '售前饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.78, description: '客服实际工作时间占排班时间的比例，50%~100%' },
         { key: 'midsale_handle_time',   label: '售中处理时长', min: 1,   max: 15,  step: 0.5,  unit: '分钟', default: 3.0 },
-        { key: 'midsale_saturation',    label: '售中饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.82 },
+        { key: 'midsale_saturation',    label: '售中饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.82, description: '客服实际工作时间占排班时间的比例，50%~100%' },
         { key: 'aftersale_handle_time', label: '售后处理时长', min: 1,   max: 15,  step: 0.5,  unit: '分钟', default: 6.5 },
-        { key: 'aftersale_saturation',  label: '售后饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.72 },
+        { key: 'aftersale_saturation',  label: '售后饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.72, description: '客服实际工作时间占排班时间的比例，50%~100%' },
       ]
     },
     {
-      title: '并发处理能力', icon: '🔄', color: '#f59e0b',
+      title: '分时爆发', icon: '🔥', color: '#f59e0b',
       params: [
-        { key: 'max_concurrent_sessions', label: '最大并发数', min: 1, max: 10, step: 1, unit: '个', default: 3, description: '单个客服同时处理的会话数量。在线客服通常2-4个' },
-        { key: 'concurrent_efficiency_loss', label: '并发效率衰减', min: 0, max: 0.5, step: 0.05, unit: '%', default: 0.15, description: '并发数增加时的注意力分散导致的速度下降' },
-      ]
-    },
-    {
-      title: '员工能力分布', icon: '👥', color: '#8b5cf6',
-      params: [
-        { key: 'novice_ratio', label: '新手占比', min: 0, max: 0.6, step: 0.05, unit: '%', default: 0.2, description: '新手处理时长通常是标准的1.5-2倍' },
-        { key: 'novice_efficiency', label: '新手效率系数', min: 0.3, max: 1.0, step: 0.05, unit: '', default: 0.6 },
-        { key: 'expert_ratio', label: '专家占比', min: 0, max: 0.4, step: 0.05, unit: '%', default: 0.15, description: '专家处理时长通常是标准的0.5-0.7倍' },
-        { key: 'expert_efficiency', label: '专家效率系数', min: 1.0, max: 2.5, step: 0.1, unit: '', default: 1.4 },
-      ]
-    },
-    {
-      title: '工作环境与状态', icon: '📊', color: '#06b6d4',
-      params: [
-        { key: 'actual_availability_rate', label: '平均在岗率', min: 0.6, max: 0.98, step: 0.05, unit: '%', default: 0.85, description: '扣除休息、培训、会议后的实际在席时间' },
-        { key: 'response_rate', label: '目标响应率', min: 0.7, max: 1.0, step: 0.01, unit: '%', default: 0.95, description: '衡量服务水平的要求，越接近1则需要人力越多' },
-        { key: 'schedule_inefficiency', label: '班次拟合损耗', min: 0, max: 0.2, step: 0.01, unit: '%', default: 0.08, description: '班次固定性导致的闲置浪费，通常在5%-15%' },
-      ]
-    },
-    {
-      title: '质量要求参数', icon: '🛡️', color: '#f97316',
-      params: [
-        { key: 'first_call_resolution', label: '首次解决率', min: 0.5, max: 1.0, step: 0.05, unit: '%', default: 0.85, description: '解决率越低，产生的二次进线话务量越多' },
-        { key: 'service_level_factor', label: '服务水平压力', min: 1.0, max: 2.0, step: 0.1, unit: '', default: 1.1, description: '应对随机进线波动的冗余系数，30秒响应通常需1.2以上' },
-      ]
-    },
-    {
-      title: '业务复杂度', icon: '🎯', color: '#ec4899',
-      params: [
-        { key: 'simple_problem_ratio', label: '简单问题占比', min: 0, max: 0.8, step: 0.05, unit: '%', default: 0.4, description: '物流/尺码等快速咨询' },
-        { key: 'simple_time_factor', label: '简单处理系数', min: 0.3, max: 1.0, step: 0.05, unit: '', default: 0.6 },
-        { key: 'complex_problem_ratio', label: '复杂问题占比', min: 0, max: 0.4, step: 0.05, unit: '%', default: 0.15, description: '投诉/疑难/维权等' },
-        { key: 'complex_time_factor', label: '复杂处理系数', min: 1.5, max: 4.0, step: 0.1, unit: '', default: 2.5 },
-      ]
-    },
-    {
-      title: '系统支持与工具', icon: '🛠️', color: '#14b8a6',
-      params: [
-        { key: 'ai_assist_usage', label: 'AI辅助覆盖率', min: 0, max: 1, step: 0.05, unit: '%', default: 0.3, description: '使用智能快捷回复/机器人辅助的比例' },
-        { key: 'ai_efficiency_gain', label: 'AI提效系数', min: 1.1, max: 2.0, step: 0.1, unit: '', default: 1.3, description: '使用AI后，这部分咨询的处理速度提升倍数' },
+        { key: 'presale_burst_start',   label: '售前爆发开始', min: 0, max: 23, step: 1, unit: '点', default: 10,  description: '售前流量爆发段开始时间，如 10 表示 10:00' },
+        { key: 'presale_burst_end',     label: '售前爆发结束', min: 0, max: 23, step: 1, unit: '点', default: 12,  description: '售前流量爆发段结束时间，如 12 表示 12:00' },
+        { key: 'presale_burst_factor',  label: '售前爆发倍数', min: 1, max: 5,  step: 0.1, unit: '倍', default: 1.9, description: '爆发时段内流量是平时的多少倍' },
+        { key: 'midsale_burst_start',   label: '售中爆发开始', min: 0, max: 23, step: 1, unit: '点', default: 15,  description: '售中流量爆发段开始时间' },
+        { key: 'midsale_burst_end',     label: '售中爆发结束', min: 0, max: 23, step: 1, unit: '点', default: 17,  description: '售中流量爆发段结束时间' },
+        { key: 'midsale_burst_factor',  label: '售中爆发倍数', min: 1, max: 5,  step: 0.1, unit: '倍', default: 2.3, description: '爆发时段内流量是平时的多少倍' },
+        { key: 'aftersale_burst_start', label: '售后爆发开始', min: 0, max: 23, step: 1, unit: '点', default: 20,  description: '售后流量爆发段开始时间' },
+        { key: 'aftersale_burst_end',   label: '售后爆发结束', min: 0, max: 23, step: 1, unit: '点', default: 22,  description: '售后流量爆发段结束时间' },
+        { key: 'aftersale_burst_factor',label: '售后爆发倍数', min: 1, max: 5,  step: 0.1, unit: '倍', default: 2.6, description: '爆发时段内流量是平时的多少倍' },
       ]
     },
     {
       title: '阶段时间偏移', icon: '⏰', color: '#6366f1',
       params: [
-        { key: 'presale_time_offset',   label: '售前提前天数', min: 0, max: 15, step: 1, unit: '天', default: 2 },
-        { key: 'midsale_time_offset',   label: '售中延迟天数', min: 0, max: 5,  step: 1, unit: '天', default: 0 },
-        { key: 'aftersale_time_offset', label: '售后延迟天数', min: 0, max: 15, step: 1, unit: '天', default: 3 },
+        { key: 'presale_time_offset',   label: '售前提前天数', min: 0, max: 15, step: 1, unit: '天', default: 2,  description: '售前咖询高峰早于活动日的天数，0 表示当天' },
+        { key: 'midsale_time_offset',   label: '售中延迟天数', min: 0, max: 5,  step: 1, unit: '天', default: 0,  description: '售中流量相对活动日的延迟，0 表示当天' },
+        { key: 'aftersale_time_offset', label: '售后延迟天数', min: 0, max: 15, step: 1, unit: '天', default: 3,  description: '售后咨询高峰晚于活动日的天数' },
       ]
     },
   ];
@@ -569,9 +536,9 @@ export const ParamPage = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <IconSettings style={{ fontSize: 18, color: 'var(--color-text-1)' }} />
-            <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-1)' }}>精算参数管理</span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-1)' }}>参数方案</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-3)', marginBottom: 12 }}>管理核心精算算法参数方案</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-3)', marginBottom: 12 }}>选择方案以编辑参数配置</div>
           
           <Button
             type="primary" long icon={<IconPlus />}
@@ -740,13 +707,6 @@ export const ParamPage = () => {
                       未保存
                     </Tag>
                   )}
-                  <Button
-                    icon={<IconSettings />}
-                    onClick={handleLoadDefaultParams}
-                    style={{ borderRadius: 8, borderColor: '#f59e0b', color: '#f59e0b' }}
-                  >
-                    加载默认参数
-                  </Button>
                   <Button
                     icon={<IconRefresh />}
                     onClick={() => selectScheme(currentScheme)}

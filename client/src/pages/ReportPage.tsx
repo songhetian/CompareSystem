@@ -1,12 +1,44 @@
 import {
-  Typography, Card, Space, Message, Modal, Button, Tag, Descriptions, Statistic
+  Typography, Card, Space, Message, Modal, Button, Tag, Descriptions, Statistic, Table, Grid
 } from '@arco-design/web-react';
-import { useState, useEffect } from 'react';
-import { IconDelete, IconRefresh, IconEye, IconHistory, IconCalendar } from '@arco-design/web-react/icon';
+import { useState, useEffect, useMemo } from 'react';
+import { IconDelete, IconRefresh, IconEye, IconHistory, IconCalendar, IconDownload, IconCheckCircle } from '@arco-design/web-react/icon';
 import { InlineLoading } from '../components/LoadingScreen';
 import { PageHeader, StatsCard } from '../components/common';
+import ExcelJS from 'exceljs';
+import dayjs from 'dayjs';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title as ChartTitle,
+  Tooltip as ChartTooltip,
+  Legend,
+  Filler,
+  RadialLinearScale
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  RadialLinearScale,
+  ChartTitle,
+  ChartTooltip,
+  Legend,
+  Filler
+);
 
 const { Title, Text } = Typography;
+const { Row, Col } = Grid;
 
 export const ReportPage = () => {
   const [history, setHistory] = useState<any[]>([]);
@@ -36,6 +68,68 @@ export const ReportPage = () => {
     setDetailModalVisible(true);
   };
 
+  const handleExport = async (record: any) => {
+    try {
+      const res = JSON.parse(record.result_json || '{}');
+      const dailyResults = res.daily_results || [];
+      
+      if (dailyResults.length === 0) {
+        Message.warning('当前报告无逐日明细数据可导出');
+        return;
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('每日人力明细');
+
+      sheet.columns = [
+        { header: '日期', key: 'date', width: 15 },
+        { header: '高峰日', key: 'isPeak', width: 12 },
+        { header: '总需求(人)', key: 'staff', width: 12 },
+        { header: '售前(人)', key: 'pre', width: 10 },
+        { header: '售中(人)', key: 'mid', width: 10 },
+        { header: '售后(人)', key: 'after', width: 10 },
+        { header: '售前咨询', key: 'vol_pre', width: 12 },
+        { header: '售中咨询', key: 'vol_mid', width: 12 },
+        { header: '售后咨询', key: 'vol_after', width: 12 },
+      ];
+
+      dailyResults.forEach((day: any) => {
+        sheet.addRow({
+          date: day.fullDate || day.date,
+          isPeak: day.isPeakDay ? '是' : '否',
+          staff: day.staff || 0,
+          pre: day.presale || 0,
+          mid: day.midsale || 0,
+          after: day.aftersale || 0,
+          vol_pre: Math.round(day.vol_pre || 0),
+          vol_mid: Math.round(day.vol_mid || 0),
+          vol_after: Math.round(day.vol_after || 0)
+        });
+      });
+
+      // 美化表头
+      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
+      sheet.getRow(1).alignment = { horizontal: 'center' };
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      
+      const safeName = (record.scheme_name || 'report').replace(/[\\\/:\*\?"<>|]/g, '_');
+      anchor.download = `精算明细_${safeName}_${dayjs().format('YYYYMMDD')}.xlsx`;
+      
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      Message.success(`成功导出 ${dailyResults.length} 天的明细数据`);
+    } catch (err: any) {
+      console.error('Export failed:', err);
+      Message.error(`导出失败: ${err.message || '未知错误'}`);
+    }
+  };
+
   const handleDelete = (id: number, name: string) => {
     Modal.confirm({
       title: '确认删除',
@@ -53,6 +147,27 @@ export const ReportPage = () => {
     });
   };
 
+  // 分页状态与逻辑
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const paginatedHistory = useMemo(() => {
+    return history.slice((page - 1) * pageSize, page * pageSize);
+  }, [history, page, pageSize]);
+
+  const renderPagination = () => (
+    history.length > pageSize && (
+      <div style={{ marginTop: 24, textAlign: 'center' }}>
+        <Pagination 
+          current={page} 
+          pageSize={pageSize} 
+          total={history.length} 
+          onChange={(p) => setPage(p)}
+          showTotal
+        />
+      </div>
+    )
+  );
+
   if (loading) {
     return <InlineLoading tip="正在加载历史记录..." />;
   }
@@ -61,9 +176,10 @@ export const ReportPage = () => {
     <div className='page-container' style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       {/* 页面头部 */}
       <PageHeader
-        title='测算报告'
-        subtitle='查看过往测算记录，挖掘人力配置规律'
+        title='测算分析报告'
+        subtitle='历史测算执行记录归档与多维度精算结果对比分析'
         icon='📊'
+
         extra={
           <Button
             icon={<IconRefresh />}
@@ -130,7 +246,7 @@ export const ReportPage = () => {
                   }}
                 />
 
-                {history.map((record, index) => {
+                {paginatedHistory.map((record, index) => {
                   const date = new Date(record.create_time);
                   const isRecent = Date.now() - date.getTime() < 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -199,6 +315,12 @@ export const ReportPage = () => {
                             >
                               查看详情
                             </Button>
+                            <Button 
+                              icon={<IconDownload />} 
+                              onClick={() => handleExport(record)}
+                            >
+                              导出
+                            </Button>
                             <Button
                               status='danger'
                               icon={<IconDelete />}
@@ -212,6 +334,7 @@ export const ReportPage = () => {
                     </div>
                   );
                 })}
+                {renderPagination()}
               </div>
 
               {/* 底部提示 */}
@@ -234,133 +357,179 @@ export const ReportPage = () => {
         title={
           <Space>
             <IconEye style={{ color: '#00bfa5' }} />
-            <Text bold>测算记录详情</Text>
+            <Text bold>精算报告全景详细分析</Text>
+            {currentRecord && <Tag color='arcoblue' size='small'>{currentRecord.scheme_name}</Tag>}
           </Space>
         }
         visible={detailModalVisible}
         onCancel={() => setDetailModalVisible(false)}
         footer={
-          <Button type='primary' onClick={() => setDetailModalVisible(false)} size='large'>
-            关闭
-          </Button>
-        }
-        style={{ width: 900, borderRadius: 12 }}
-      >
-        {currentRecord && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {/* 基本信息 */}
-            <Card
-              title={<Text bold>📋 基本信息</Text>}
-              bordered={false}
-              style={{ borderRadius: 12, background: 'var(--color-bg-2)', border: '1px solid var(--color-border-2)' }}
+          <Space>
+            <Button 
+              icon={<IconDownload />} 
+              onClick={() => handleExport(currentRecord)}
             >
-              <Descriptions
-                column={2}
-                data={[
-                  {
-                    label: '方案名称',
-                    value: <Text bold style={{ fontSize: 16 }}>{currentRecord.scheme_name}</Text>
-                  },
-                  {
-                    label: '测算时间',
-                    value: currentRecord.create_time
-                      ? new Date(currentRecord.create_time).toLocaleString('zh-CN', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : '-'
-                  },
-                  {
-                    label: '描述说明',
-                    value: currentRecord.description || '暂无描述',
-                    span: 2
-                  }
-                ]}
-              />
-            </Card>
+              导出 Excel
+            </Button>
+            <Button type='primary' onClick={() => setDetailModalVisible(false)}>
+              关闭
+            </Button>
+          </Space>
+        }
+        style={{ width: 800, borderRadius: 12, top: 40 }}
+      >
+        {currentRecord && (() => {
+          let res: any = {};
+          let params: any = {};
+          try { 
+            res = JSON.parse(currentRecord.result_json || '{}'); 
+            params = JSON.parse(currentRecord.params_json || '{}');
+          } catch {}
+          
+          return (
+            <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 8 }}>
+              <Space direction='vertical' size='large' style={{ width: '100%' }}>
+                
+                {/* 1. 基础信息快照 */}
+                <Descriptions
+                  column={2}
+                  title={<Title heading={6}>📌 基础信息快照</Title>}
+                  border
+                  size='small'
+                  data={[
+                    { label: '方案名称', value: currentRecord.scheme_name },
+                    { label: '生成时间', value: currentRecord.create_time || '-' },
+                    { label: '计算周期', value: `${currentRecord.start_date} 至 ${currentRecord.end_date} (${res.days || '-'}天)` },
+                    { 
+                      label: res.target_sales > 0 ? '目标销售额' : '目标访客数', 
+                      value: <Text bold style={{ color: 'var(--color-primary-light-4)' }}>
+                        {res.target_sales > 0 ? `¥${res.target_sales?.toLocaleString()}` : `${res.target_visitors?.toLocaleString() || 0} 人`}
+                      </Text>
+                    },
+                  ]}
+                />
 
-            {/* 参数配置 */}
-            {currentRecord.params_json && (
-              <Card
-                title={<Text bold>⚙️ 核心参数</Text>}
-                bordered={false}
-                style={{ borderRadius: 12, background: 'var(--color-bg-2)', border: '1px solid var(--color-border-2)' }}
-              >
-                {(() => {
-                  try {
-                    const params = JSON.parse(currentRecord.params_json);
-                    return (
-                      <Descriptions
-                        column={3}
-                        data={[
-                          { label: '售前处理时长', value: `${params.presale_handle_time || 4.5} 分钟` },
-                          { label: '售中处理时长', value: `${params.midsale_handle_time || 3.0} 分钟` },
-                          { label: '售后处理时长', value: `${params.aftersale_handle_time || 6.5} 分钟` },
-                          { label: '询单转化率', value: `${((params.c_to_o || 0.45) * 100).toFixed(0)}%` },
-                          { label: '付款售后率', value: `${((params.payment_to_aftersale || 0.15) * 100).toFixed(0)}%` },
-                          { label: '客单价', value: `${params.avg_order_value || 200} 元` },
-                        ]}
+                {/* 2. 精算核心结论 */}
+                <Card title={<Title heading={6} style={{ margin: 0 }}>📊 精算核心产出</Title>} style={{ background: 'var(--color-fill-1)', border: 'none' }}>
+                  <Row gutter={24}>
+                    <Col span={8}>
+                      <Statistic title="建议总编制" value={res.needed_staff || 0} suffix="人" groupSeparator valueStyle={{ color: '#165DFF' }} />
+                    </Col>
+                    <Col span={8}>
+                      <Statistic title="预测总咨询量" value={Math.round(res.total_consult || 0)} suffix="次" groupSeparator />
+                    </Col>
+                    <Col span={8}>
+                      <Statistic title="日均话务量" value={Math.round(res.daily_consult || 0)} suffix="次" groupSeparator />
+                    </Col>
+                  </Row>
+
+                  <div style={{ marginTop: 20 }}>
+                    <Text type='secondary'>每日人力需求趋势：</Text>
+                    <div style={{ height: 200, marginTop: 10 }}>
+                      <Bar 
+                        data={{
+                          labels: (res.daily_results || []).map((d: any) => d.fullDate || d.date),
+                          datasets: [
+                            { label: '售前', data: (res.daily_results || []).map((d: any) => d.presale), backgroundColor: '#8b5cf6' },
+                            { label: '售中', data: (res.daily_results || []).map((d: any) => d.midsale), backgroundColor: '#f59e0b' },
+                            { label: '售后', data: (res.daily_results || []).map((d: any) => d.aftersale), backgroundColor: '#10b981' },
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          scales: { y: { stacked: true }, x: { stacked: true, ticks: { font: { size: 10 } } } },
+                          plugins: { legend: { position: 'bottom' } }
+                        }}
                       />
-                    );
-                  } catch (e) {
-                    return <Text type='secondary'>参数解析失败</Text>;
-                  }
-                })()}
-              </Card>
-            )}
+                    </div>
+                  </div>
 
-            {/* 测算结果 */}
-            {currentRecord.result_json && (
-              <Card
-                title={<Text bold>📊 测算结果</Text>}
-                bordered={false}
-                style={{ borderRadius: 12, background: 'var(--color-bg-2)', border: '1px solid var(--color-border-2)' }}
-              >
-                {(() => {
-                  try {
-                    const res = JSON.parse(currentRecord.result_json);
-                    return (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-                        <div style={{ background: 'rgba(22,93,255,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(22,93,255,0.1)' }}>
-                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>建议总编制</div>
-                          <div style={{ color: '#165dff', fontSize: 24, fontWeight: 'bold' }}>{res.needed_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
-                        </div>
-                        <div style={{ background: 'rgba(0,180,42,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(0,180,42,0.1)' }}>
-                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>售前人员</div>
-                          <div style={{ color: '#00b42a', fontSize: 24, fontWeight: 'bold' }}>{res.presale_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
-                        </div>
-                        <div style={{ background: 'rgba(255,125,0,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(255,125,0,0.1)' }}>
-                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>售中人员</div>
-                          <div style={{ color: '#ff7d00', fontSize: 24, fontWeight: 'bold' }}>{res.midsale_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
-                        </div>
-                        <div style={{ background: 'rgba(245,63,63,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(245,63,63,0.1)' }}>
-                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>售后人员</div>
-                          <div style={{ color: '#f53f3f', fontSize: 24, fontWeight: 'bold' }}>{res.aftersale_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
-                        </div>
-                        
-                        <div style={{ gridColumn: 'span 4', marginTop: 16 }}>
-                          <Descriptions
-                            column={3}
-                            data={[
-                              { label: '日均接待预估', value: `${Math.round(res.daily_consult || 0)} 次` },
-                              { label: '理论峰值日', value: `${res.theoretical_peak || 0} 人` },
-                              { label: '日均工时负荷', value: `${(res.daily_hours || 0).toFixed(1)} 小时` },
-                            ]}
-                          />
-                        </div>
+                  <div style={{ marginTop: 20 }}>
+                    <Text type='secondary'>岗位人力配比：</Text>
+                    <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+                      <div style={{ flex: 1, padding: '12px', background: '#e8f3ff', borderRadius: 8, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#165DFF' }}>售前组</div>
+                        <div style={{ fontSize: 20, fontWeight: 700 }}>{res.presale_staff || 0} <small style={{ fontSize: 12 }}>人</small></div>
                       </div>
-                    );
-                  } catch (e) {
-                    return <Text type='secondary'>结果解析失败</Text>;
-                  }
-                })()}
-              </Card>
-            )}
-          </div>
-        )}
+                      <div style={{ flex: 1, padding: '12px', background: '#e8ffea', borderRadius: 8, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#00B42A' }}>售中组</div>
+                        <div style={{ fontSize: 20, fontWeight: 700 }}>{res.midsale_staff || 0} <small style={{ fontSize: 12 }}>人</small></div>
+                      </div>
+                      <div style={{ flex: 1, padding: '12px', background: '#fff7e8', borderRadius: 8, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#FF7D00' }}>售后组</div>
+                        <div style={{ fontSize: 20, fontWeight: 700 }}>{res.aftersale_staff || 0} <small style={{ fontSize: 12 }}>人</small></div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+
+                {/* 3. 流量拆解详情 */}
+                <div>
+                  <Title heading={6}>🔍 流量推演双径拆解</Title>
+                  <div style={{ padding: '0 12px' }}>
+                    <Row gutter={16} align='center'>
+                      <Col span={11}>
+                        <div style={{ padding: 12, border: '1px solid var(--color-border-2)', borderRadius: 8 }}>
+                          <Text type='secondary' size='small'>路径A：销售额反推</Text>
+                          <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>{Math.round(res.presale_from_sales || 0).toLocaleString()} <small style={{ fontWeight: 400, fontSize: 12 }}>次咨询</small></div>
+                        </div>
+                      </Col>
+                      <Col span={2} style={{ textAlign: 'center' }}><Text type='secondary'>VS</Text></Col>
+                      <Col span={11}>
+                        <div style={{ padding: 12, border: '1px solid var(--color-border-2)', borderRadius: 8 }}>
+                          <Text type='secondary' size='small'>路径B：基准访客正推</Text>
+                          <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>{Math.round(res.visitor_presale_baseline || 0).toLocaleString()} <small style={{ fontWeight: 400, fontSize: 12 }}>次咨询</small></div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
+                </div>
+
+                {/* 4. 关键算法系数快照 */}
+                <Descriptions
+                  column={3}
+                  title={<Title heading={6}>⚙️ 核心算法系数快照</Title>}
+                  size='small'
+                  layout='inline-horizontal'
+                  data={[
+                    { label: '平均并发', value: params.max_concurrent_sessions || 3 },
+                    { label: '首次解决率', value: `${((params.first_call_resolution || 0.85) * 100).toFixed(0)}%` },
+                    { label: '实际在岗率', value: `${((params.actual_availability_rate || 0.85) * 100).toFixed(0)}%` },
+                    { label: '目标响应率', value: `${((params.response_rate || 0.95) * 100).toFixed(0)}%` },
+                    { label: '班次损耗', value: `${((params.schedule_inefficiency || 0.08) * 100).toFixed(0)}%` },
+                    { label: 'SL压力系数', value: params.service_level_factor || 1.1 },
+                  ]}
+                />
+
+                {/* 5. 敏感度对冲预估 */}
+                {res.sensitivity && (
+                  <div>
+                    <Title heading={6}>📉 业务波动敏感度对冲预估</Title>
+                    <Table
+                      size='small'
+                      pagination={false}
+                      rowKey="id"
+                      columns={[
+                        { title: '业务指标变动', dataIndex: 'scenario' },
+                        { title: '编制变动影响', dataIndex: 'impact', render: (val) => (
+                          <Tag color={val > 0 ? 'red' : 'green'}>{val > 0 ? `+${val}` : val} 人</Tag>
+                        )},
+                        { title: '对冲建议', dataIndex: 'action' }
+                      ]}
+                      data={[
+                        { id: 1, scenario: '客单价 降低 10%', impact: Math.abs(res.sensitivity.avg_order_value || 0), action: '建议申请临时增编' },
+                        { id: 2, scenario: '客单价 提升 10%', impact: -(res.sensitivity.avg_order_value || 0), action: '存在编制溢出风险' },
+                        { id: 3, scenario: '转化率 提升 10%', impact: res.sensitivity.conversion_rate || 0, action: '关注人员饱和度压力' },
+                      ]}
+                    />
+                  </div>
+                )}
+              </Space>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

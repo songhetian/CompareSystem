@@ -150,8 +150,8 @@ export const DepartmentPage = () => {
   return (
     <div className='page-container' style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       <PageHeader
-        title='部门管理'
-        subtitle='配置组织架构与部门信息，实现精细化人力核算'
+        title='组织架构档案'
+        subtitle='维护客服中心多层级组织节点，实现精细化人力核算与归属管理'
         icon='🏢'
         extra={
           <Space size="medium">

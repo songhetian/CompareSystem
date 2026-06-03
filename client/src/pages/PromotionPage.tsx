@@ -116,8 +116,8 @@ export const PromotionPage = () => {
     <div className='page-container' style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       {/* 页面头部 */}
       <PageHeader
-        title='活动规划'
-        subtitle='配置不同级别的营销活动，精准预估流量爆发'
+        title='营销计划库'
+        subtitle='配置周期性营销活动与业务影响系数，精准预估流量爆发趋势'
         icon='🔥'
         extra={
           <Space size='medium'>

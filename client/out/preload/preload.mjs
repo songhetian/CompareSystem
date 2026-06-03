@@ -109,6 +109,7 @@ const api = {
   deleteScheme: (id) => ipcRenderer.invoke("delete:scheme", id),
   setDefaultScheme: (id) => ipcRenderer.invoke("set-default:scheme", id),
   getHistory: () => ipcRenderer.invoke("get:history"),
+  addHistory: (data) => ipcRenderer.invoke("add:history", data),
   deleteHistory: (id) => ipcRenderer.invoke("delete:history", id),
   // 部门管理
   getDepartments: () => ipcRenderer.invoke("get:departments"),
@@ -120,6 +121,7 @@ const api = {
   addPersonnel: (data) => ipcRenderer.invoke("add:personnel", data),
   updatePersonnel: (data) => ipcRenderer.invoke("update:personnel", data),
   deletePersonnel: (id) => ipcRenderer.invoke("delete:personnel", id),
+  batchPersonnel: (data) => ipcRenderer.invoke("batch:personnel", data),
   // 排班管理
   getAssignments: (startDate, endDate) => ipcRenderer.invoke("get:assignments", startDate, endDate),
   addAssignment: (data) => ipcRenderer.invoke("add:assignment", data),

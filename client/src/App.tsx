@@ -23,30 +23,35 @@ import { ReportPage } from './pages/ReportPage';
 import { HistoryDataPage } from './pages/HistoryDataPage';
 import './theme/global.css';
 
+import { DashboardPage } from './pages/DashboardPage';
+
 const MenuItem = Menu.Item;
 const SubMenu = Menu.SubMenu;
 const { Text } = Typography;
 
 // 页面配置
 const PAGE_CONFIG = {
-  home: { title: '智能测算', subtitle: '智能人力需求测算与方案生成' },
-  shift: { title: '人员排班', subtitle: '为人员分配每日班次' },
-  dept: { title: '部门管理', subtitle: '配置组织架构与部门信息' },
-  personnel: { title: '人员管理', subtitle: '管理客服中心人员基本信息' },
-  shiftConfig: { title: '班次定义', subtitle: '设计班次时间与时长' },
-  promo: { title: '活动规划', subtitle: '促销活动管理与系数配置' },
-  param: { title: '参数方案', subtitle: '参数方案配置与管理' },
-  historyData: { title: '业务参考', subtitle: '多项目历史业务数据管理与分析' },
-  report: { title: '测算报告', subtitle: '测算历史记录查看与管理' },
+  dashboard: { title: '决策大脑看板', subtitle: '全场景人力数据实时监控与辅助决策分析' },
+  actuarial: { title: '人力精算建模', subtitle: '多维度人力需求精算与自动化方案生成' },
+  shift: { title: '智能排班调度', subtitle: '基于测算结果的客服人员班次智能分配' },
+  dept: { title: '组织架构档案', subtitle: '维护客服中心组织节点与归属关系' },
+  personnel: { title: '人力资源管理', subtitle: '全量员工档案、技能组与在职状态管理' },
+  shiftConfig: { title: '班次方案配置', subtitle: '标准化班次时段、工时与休息规则定义' },
+  promo: { title: '营销计划库', subtitle: '周期性营销活动计划与业务影响系数配置' },
+  param: { title: '精算参数管理', subtitle: '核心算法参数方案与全局策略控制' },
+  historyData: { title: '业务历史看板', subtitle: '多维度历史话务指标与业务趋势分析' },
+  report: { title: '测算分析报告', subtitle: '人力精算历史执行记录与对比分析报告' },
 };
 
 function App() {
   const [collapsed, setCollapsed] = useState(false);
-  const [currentPage, setCurrentPage] = useState('home');
+  const [currentPage, setCurrentPage] = useState('dashboard');
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'home':
+      case 'dashboard':
+        return <DashboardPage />;
+      case 'actuarial':
         return <BudgetPage />;
       case 'shift':
         return <ShiftAssignmentPage />;
@@ -70,7 +75,7 @@ function App() {
   };
 
   const getCurrentPageInfo = () => {
-    return PAGE_CONFIG[currentPage as keyof typeof PAGE_CONFIG] || PAGE_CONFIG.home;
+    return PAGE_CONFIG[currentPage as keyof typeof PAGE_CONFIG] || PAGE_CONFIG.dashboard;
   };
 
   return (
@@ -81,9 +86,11 @@ function App() {
         onCollapse={setCollapsed}
         collapsible
         trigger={null}
+        width={240}
         style={{
           background: '#FFFFFF',
           boxShadow: '2px 0 8px rgba(0,0,0,0.05)',
+          zIndex: 100,
         }}
       >
         {/* Logo 区域 */}
@@ -92,93 +99,116 @@ function App() {
             height: 64,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0 16px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '0' : '0 20px',
             borderBottom: '1px solid var(--gray-3)',
+            transition: 'all 0.2s',
           }}
         >
-          {!collapsed ? (
-            <Space size={8} align='center'>
-              <span style={{ fontSize: 28 }}>🧠</span>
+          <Space size={10} align='center'>
+            <span style={{ fontSize: 28 }}>🧠</span>
+            {!collapsed && (
               <Text
                 bold
                 style={{
                   fontSize: 16,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: 'linear-gradient(135deg, #165DFF 0%, #722ED1 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                客服人力精算
+                人力精算引擎
               </Text>
-            </Space>
-          ) : (
-            <span style={{ fontSize: 28 }}>🧠</span>
-          )}
+            )}
+          </Space>
         </div>
 
         {/* 导航菜单 */}
-        <Menu
-          defaultSelectedKeys={['home']}
-          selectedKeys={[currentPage]}
-          style={{ width: '100%', marginTop: 8 }}
-          onClickMenuItem={setCurrentPage}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          <Menu
+            defaultSelectedKeys={['dashboard']}
+            selectedKeys={[currentPage]}
+            style={{ width: '100%', marginTop: 8 }}
+            onClickMenuItem={setCurrentPage}
+            collapse={collapsed}
+          >
+            <Menu.ItemGroup label={collapsed ? '' : "决策中心"}>
+              <MenuItem key='dashboard'>
+                <IconDashboard />
+                决策大脑看板
+              </MenuItem>
+              <MenuItem key='actuarial'>
+                <IconFire />
+                人力精算建模
+              </MenuItem>
+              <MenuItem key='shift'>
+                <IconCalendar />
+                智能排班调度
+              </MenuItem>
+            </Menu.ItemGroup>
+
+            <Menu.ItemGroup label={collapsed ? '' : "数据资产"}>
+              <MenuItem key='report'>
+                <IconFile />
+                测算分析报告
+              </MenuItem>
+              <MenuItem key='historyData'>
+                <IconStorage />
+                业务历史看板
+              </MenuItem>
+            </Menu.ItemGroup>
+
+            <Menu.ItemGroup label={collapsed ? '' : "资源管理"}>
+              <MenuItem key='dept'>
+                <IconFile />
+                组织架构档案
+              </MenuItem>
+              <MenuItem key='personnel'>
+                <IconUserGroup />
+                人力资源管理
+              </MenuItem>
+              <MenuItem key='shiftConfig'>
+                <IconClockCircle />
+                班次方案配置
+              </MenuItem>
+            </Menu.ItemGroup>
+
+            <Menu.ItemGroup label={collapsed ? '' : "控制策略"}>
+              <MenuItem key='promo'>
+                <IconFire />
+                营销计划库
+              </MenuItem>
+              <MenuItem key='param'>
+                <IconSettings />
+                精算参数管理
+              </MenuItem>
+            </Menu.ItemGroup>
+          </Menu>
+        </div>
+        
+        {/* 底部折叠切换 */}
+        <div 
+          style={{ 
+            height: 48, 
+            borderTop: '1px solid var(--gray-3)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            padding: '0 20px',
+            cursor: 'pointer',
+            color: 'var(--color-text-3)',
+            marginTop: 'auto'
+          }}
+          onClick={() => setCollapsed(!collapsed)}
         >
-          <Menu.ItemGroup label="核心测算">
-            <MenuItem key='home'>
-              <IconDashboard />
-              智能测算
-            </MenuItem>
-            <MenuItem key='historyData'>
-              <IconStorage />
-              业务参考
-            </MenuItem>
-            <MenuItem key='report'>
-              <IconFile />
-              测算报告
-            </MenuItem>
-          </Menu.ItemGroup>
-
-          <Menu.ItemGroup label="人员组织">
-            <MenuItem key='dept'>
-              <IconFile />
-              部门管理
-            </MenuItem>
-            <MenuItem key='personnel'>
-              <IconUserGroup />
-              人员管理
-            </MenuItem>
-            <MenuItem key='shift'>
-              <IconCalendar />
-              人员排班
-            </MenuItem>
-          </Menu.ItemGroup>
-
-          <Menu.ItemGroup label="参数配置">
-            <MenuItem key='shiftConfig'>
-              <IconClockCircle />
-              班次定义
-            </MenuItem>
-            <MenuItem key='promo'>
-              <IconFire />
-              活动规划
-            </MenuItem>
-            <MenuItem key='param'>
-              <IconSettings />
-              参数方案
-            </MenuItem>
-          </Menu.ItemGroup>
-        </Menu>
+          {collapsed ? <IconMenuUnfold style={{ fontSize: 18 }} /> : <Space><IconMenuFold style={{ fontSize: 18 }} /><Text size='small'>收起导航</Text></Space>}
+        </div>
 
         {/* 版本信息 */}
         {!collapsed && (
           <div
             style={{
-              position: 'absolute',
-              bottom: 16,
-              left: 0,
-              right: 0,
-              padding: '0 16px',
+              padding: '12px 16px',
               textAlign: 'center',
             }}
           >

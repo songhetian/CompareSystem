@@ -30,16 +30,25 @@ export interface CalcParams {
   aftersale_handle_time: number;
   aftersale_saturation: number;
 
-  // 分时爆发
-  presale_burst_start?: number;
-  presale_burst_end?: number;
-  presale_burst_factor?: number;
-  midsale_burst_start?: number;
-  midsale_burst_end?: number;
-  midsale_burst_factor?: number;
-  aftersale_burst_start?: number;
-  aftersale_burst_end?: number;
-  aftersale_burst_factor?: number;
+  // 并发处理能力
+  max_concurrent_sessions?: number;
+  concurrent_efficiency_loss?: number;
+
+  // 员工能力分布
+  novice_ratio?: number;
+  novice_efficiency?: number;
+  expert_ratio?: number;
+  expert_efficiency?: number;
+
+  // 工作状态
+  actual_availability_rate?: number;
+  response_rate?: number;
+
+  // 业务复杂度
+  simple_problem_ratio?: number;
+  simple_time_factor?: number;
+  complex_problem_ratio?: number;
+  complex_time_factor?: number;
 
   // 大促系数（作为默认备用值）
   event_s?: number;
@@ -197,14 +206,58 @@ export class ManpowerCalculator {
       p_to_a: p('payment_to_aftersale', 0.15)
     };
 
-    // 4. 岗位效能参数（每小时处理能力）
-    const cap = {
+    // 4. 岗位效能参数（每小时基础处理能力）
+    const baseHandleCapacity = {
       presale: (60.0 / p('presale_handle_time', 4.5)) * p('presale_saturation', 0.78),
       midsale: (60.0 / p('midsale_handle_time', 3.0)) * p('midsale_saturation', 0.82),
       aftersale: (60.0 / p('aftersale_handle_time', 6.5)) * p('aftersale_saturation', 0.72)
     };
 
-    // 5. 活动力度系数
+    // 5. 并发处理能力调整
+    const maxConcurrent = p('max_concurrent_sessions', 3);
+    const concurrentLoss = p('concurrent_efficiency_loss', 0.15);
+    const concurrentMultiplier = maxConcurrent * (1 - concurrentLoss);
+
+    // 6. 业务复杂度调整（加权平均处理时长系数）
+    const simpleRatio = p('simple_problem_ratio', 0.5);
+    const simpleFactor = p('simple_time_factor', 0.6);
+    const complexRatio = p('complex_problem_ratio', 0.15);
+    const complexFactor = p('complex_time_factor', 2.0);
+    const normalRatio = 1.0 - simpleRatio - complexRatio; // 中等问题占比
+    const complexityFactor = simpleRatio * simpleFactor + normalRatio * 1.0 + complexRatio * complexFactor;
+
+    // 7. 员工能力分布调整（加权平均效率）
+    const noviceRatio = p('novice_ratio', 0.2);
+    const noviceEff = p('novice_efficiency', 0.6);
+    const expertRatio = p('expert_ratio', 0.15);
+    const expertEff = p('expert_efficiency', 1.4);
+    const normalStaffRatio = 1.0 - noviceRatio - expertRatio; // 普通员工占比
+    const teamEfficiency = noviceRatio * noviceEff + normalStaffRatio * 1.0 + expertRatio * expertEff;
+
+    // 7.5 系统工具提效
+    const aiUsage = p('ai_assist_usage', 0.3);
+    const aiGain = p('ai_efficiency_gain', 1.3);
+    const systemToolEfficiency = aiUsage * aiGain + (1 - aiUsage) * 1.0;
+
+    // 8. 工作状态调整
+    const availabilityRate = p('actual_availability_rate', 0.85);
+    const responseRate = p('response_rate', 0.95);
+    const scheduleLoss = p('schedule_inefficiency', 0.08); // 班次拟合损耗
+    const workStateMultiplier = responseRate; // 在岗率独立在需求端计算
+
+    // 8.5 质量与总量校准
+    const fcr = p('first_call_resolution', 0.85);
+    const slFactor = p('service_level_factor', 1.1);
+    const repeatCallFactor = 2.0 - fcr; // FCR=0.85 -> 1.15倍话务量
+
+    // 9. 综合处理能力（考虑并发、效能、系统提效）
+    const cap = {
+      presale: baseHandleCapacity.presale * concurrentMultiplier * teamEfficiency * systemToolEfficiency * workStateMultiplier,
+      midsale: baseHandleCapacity.midsale * concurrentMultiplier * teamEfficiency * systemToolEfficiency * workStateMultiplier,
+      aftersale: baseHandleCapacity.aftersale * concurrentMultiplier * teamEfficiency * systemToolEfficiency * workStateMultiplier
+    };
+
+    // 10. 活动力度系数
     let eventF = 1.0;
 
     // 优先使用活动规划中精确设置的系数
@@ -220,16 +273,25 @@ export class ManpowerCalculator {
       }
     }
 
-    // 6. 双径流量推演
+    // 11. 双径流量推演
     // 路径A: 从销售额反推咨询量
     const ordersFromSales = (targetSales / avgOv) * eventF;
-    const presaleFromSales = ordersFromSales / (conversion.c_to_o * conversion.o_to_p);
+    const presaleFromSales = (ordersFromSales / (conversion.c_to_o * conversion.o_to_p)) * repeatCallFactor;
 
-    // 路径B: 从访客量正推咨询量（确保人力底线）
-    const visitorPresaleBaseline = baseDailyVisitors * days * vToPRate;
+    // 路径B: 从访客量正推咨询量（基准底线）
+    // 关键修正：如果明确是“销售额驱动”，则访客保底应适当调低或作为软参考
+    const visitorPresaleBaseline = (baseDailyVisitors * days * vToPRate) * repeatCallFactor;
 
-    // 取两者最大值，确保不漏流量
-    const totalPresale = Math.max(presaleFromSales, visitorPresaleBaseline);
+    // 综合判定最终售前咨询量
+    let totalPresale = 0;
+    if (targetSales > 0) {
+      // 销售额驱动：取路径A，但给路径B设定一个较低的保底系数(如0.3)，防止销售额填得极低导致人数为0
+      totalPresale = Math.max(presaleFromSales, visitorPresaleBaseline * 0.3);
+    } else {
+      // 访客数驱动：取路径B
+      totalPresale = visitorPresaleBaseline;
+    }
+    
     const totalMidsale = totalPresale * conversion.m_ratio;
     const totalAftersale = (totalPresale * conversion.c_to_o * conversion.o_to_p) * conversion.p_to_a;
 
@@ -241,26 +303,29 @@ export class ManpowerCalculator {
     const histWeights = this.getHistoryTrendWeights(historyData || [], days);
 
     if (histWeights) {
-      // 使用历史数据的销售额比例直接作为三个阶段的权重
-      // 三个阶段共享同一个历史趋势曲线，只是总量比例不同（由 totalPresale/Mid/Aft 体现）
       wPre = histWeights;
       wMid = histWeights;
       wAft = histWeights;
     } else {
-      // 无历史数据：回退到高斯分布数学模型
       const numPeaks = eventDates.length;
-      wPre = new Array(days).fill(0.0);
-      wMid = new Array(days).fill(0.0);
-      wAft = new Array(days).fill(0.0);
-
-      for (const ed of eventDates) {
-        const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
-        const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
-        const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
-        for (let i = 0; i < days; i++) {
-          wPre[i] += wp[i] / numPeaks;
-          wMid[i] += wm[i] / numPeaks;
-          wAft[i] += wa[i] / numPeaks;
+      if (numPeaks === 0) {
+        const uniformWeight = 1.0 / days;
+        wPre = new Array(days).fill(uniformWeight);
+        wMid = new Array(days).fill(uniformWeight);
+        wAft = new Array(days).fill(uniformWeight);
+      } else {
+        wPre = new Array(days).fill(0.0);
+        wMid = new Array(days).fill(0.0);
+        wAft = new Array(days).fill(0.0);
+        for (const ed of eventDates) {
+          const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
+          const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
+          const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
+          for (let i = 0; i < days; i++) {
+            wPre[i] += wp[i] / numPeaks;
+            wMid[i] += wm[i] / numPeaks;
+            wAft[i] += wa[i] / numPeaks;
+          }
         }
       }
     }
@@ -272,10 +337,10 @@ export class ManpowerCalculator {
       const vM = totalMidsale * wMid[i];
       const vA = totalAftersale * wAft[i];
 
-      /**
-       * 关键算法：岗位人力需求计算
-       * 考虑峰值、安全冗余、岗位效能
-       */
+      // 关键：先判定日期属性
+      const currentDateStr = startDate.add(i, 'day').format('YYYY-MM-DD');
+      const isPeakDay = peakDates.some(pd => pd.format('YYYY-MM-DD') === currentDateStr);
+
       const getRawDemand = (vol: number, phase: 'presale' | 'midsale' | 'aftersale') => {
         // 每小时基础话务量
         let hV = (vol / 24.0) * peakFactor * safetyBuffer;
@@ -283,32 +348,30 @@ export class ManpowerCalculator {
         // 售前补正系数（夜间/晚间压力更大）
         if (phase === 'presale') hV *= 1.5;
 
-        return cap[phase] > 0 ? hV / cap[phase] : 0;
+        // 在需求端应用业务复杂度分布系数和实际在岗率
+        return cap[phase] > 0 ? (hV * complexityFactor) / (cap[phase] * availabilityRate) : 0;
       };
 
       const rawP = getRawDemand(vP, 'presale');
       const rawM = getRawDemand(vM, 'midsale');
       const rawA = getRawDemand(vA, 'aftersale');
 
-      // 判断当天是否是高峰日（使用peakDates而非eventDates）
-      const currentDateStr = startDate.add(i, 'day').format('YYYY-MM-DD');
-      const isPeakDay = peakDates.some(pd => pd.format('YYYY-MM-DD') === currentDateStr);
-
-      // 应用高峰日系数
+      // 应用高峰日系数、班次损耗和服务水平压力
       const peakMultiplier = isPeakDay ? peakDayFactor : 1.0;
-      const adjustedRawP = rawP * peakMultiplier;
-      const adjustedRawM = rawM * peakMultiplier;
-      const adjustedRawA = rawA * peakMultiplier;
+      // 最终人数 = (原始需求 * 高峰系数 * 服务水平压力) / (1 - 班次拟合损耗)
+      const finalRawP = (rawP * peakMultiplier * slFactor) / (1 - scheduleLoss);
+      const finalRawM = (rawM * peakMultiplier * slFactor) / (1 - scheduleLoss);
+      const finalRawA = (rawA * peakMultiplier * slFactor) / (1 - scheduleLoss);
 
       // 先求和再取整（全能客服模型）
       dailyResults.push({
         date: startDate.add(i, 'day').format('MM-DD'),
         fullDate: currentDateStr,
         isPeakDay,
-        staff: Math.ceil(adjustedRawP + adjustedRawM + adjustedRawA),
-        presale: Math.ceil(adjustedRawP),
-        midsale: Math.ceil(adjustedRawM),
-        aftersale: Math.ceil(adjustedRawA),
+        staff: Math.ceil(finalRawP + finalRawM + finalRawA),
+        presale: Math.ceil(finalRawP),
+        midsale: Math.ceil(finalRawM),
+        aftersale: Math.ceil(finalRawA),
         vol_pre: vP,
         vol_mid: vM,
         vol_after: vA
@@ -320,54 +383,22 @@ export class ManpowerCalculator {
     const neededStaff = Math.max(theoreticalPeak, minStaff); // 应用班次最低保底
     const peakDay = dailyResults.reduce((prev, curr) => (curr.staff > prev.staff ? curr : prev));
 
-    // 10. 24小时分布计算（基于峰值日）
+    // 10. 24小时分布计算（简化版：均匀分布，不再使用分时爆发）
     const hourlyPresale: number[] = [];
     const hourlyMidsale: number[] = [];
     const hourlyAftersale: number[] = [];
     const hourlyTotal: number[] = [];
 
-    // 分时爆发参数
-    const presaleBurstStart = p('presale_burst_start', 10);
-    const presaleBurstEnd = p('presale_burst_end', 12);
-    const presaleBurstFactor = p('presale_burst_factor', 1.9);
-
-    const midsaleBurstStart = p('midsale_burst_start', 15);
-    const midsaleBurstEnd = p('midsale_burst_end', 17);
-    const midsaleBurstFactor = p('midsale_burst_factor', 2.3);
-
-    const aftersaleBurstStart = p('aftersale_burst_start', 20);
-    const aftersaleBurstEnd = p('aftersale_burst_end', 22);
-    const aftersaleBurstFactor = p('aftersale_burst_factor', 2.6);
-
+    // 简单均匀分布：峰值日的人力需求 / 24小时
     for (let hour = 0; hour < 24; hour++) {
-      const basePresale = peakDay.presale / 24;
-      const baseMidsale = peakDay.midsale / 24;
-      const baseAftersale = peakDay.aftersale / 24;
+      const presaleHour = peakDay.presale / 24;
+      const midsaleHour = peakDay.midsale / 24;
+      const aftersaleHour = peakDay.aftersale / 24;
 
-      // 应用分时爆发系数
-      const presaleHour =
-        hour >= presaleBurstStart && hour < presaleBurstEnd
-          ? basePresale * presaleBurstFactor
-          : basePresale;
-
-      const midsaleHour =
-        hour >= midsaleBurstStart && hour < midsaleBurstEnd
-          ? baseMidsale * midsaleBurstFactor
-          : baseMidsale;
-
-      const aftersaleHour =
-        hour >= aftersaleBurstStart && hour < aftersaleBurstEnd
-          ? baseAftersale * aftersaleBurstFactor
-          : baseAftersale;
-
-      // 夜间额外补正（0-2点和20-24点）
-      let nightBoost = 1.0;
-      if (hour < 2 || hour >= 20) nightBoost = 1.3;
-
-      hourlyPresale.push(presaleHour * nightBoost);
+      hourlyPresale.push(presaleHour);
       hourlyMidsale.push(midsaleHour);
       hourlyAftersale.push(aftersaleHour);
-      hourlyTotal.push(presaleHour * nightBoost + midsaleHour + aftersaleHour);
+      hourlyTotal.push(presaleHour + midsaleHour + aftersaleHour);
     }
 
     // 11. 真实敏感度分析：分别小幅调整关键参数，观察结果变化
@@ -375,15 +406,22 @@ export class ManpowerCalculator {
       const newOv = avgOv * (1 + ovDelta);
       const newCr = conversion.c_to_o * (1 + crDelta);
       const newOrders = (targetSales / newOv) * eventF;
-      const newPresale = newOrders / (newCr * conversion.o_to_p);
+      const newPresale = (newOrders / (newCr * conversion.o_to_p)) * repeatCallFactor;
       const newTotal = Math.max(newPresale, visitorPresaleBaseline);
       const newMid = newTotal * conversion.m_ratio;
       const newAft = (newTotal * newCr * conversion.o_to_p) * conversion.p_to_a;
-      const peakW = wPre[dailyResults.findIndex(r => r.staff === theoreticalPeak)] || (1 / days);
-      const rP = ((newTotal * peakW) / 24.0 * peakFactor * safetyBuffer * 1.5) / cap.presale;
-      const rM = ((newMid * peakW) / 24.0 * peakFactor * safetyBuffer) / cap.midsale;
-      const rA = ((newAft * peakW) / 24.0 * peakFactor * safetyBuffer) / cap.aftersale;
-      return Math.ceil(rP + rM + rA);
+      
+      const peakIdx = dailyResults.findIndex(r => r.staff === theoreticalPeak);
+      const peakW = wPre[peakIdx === -1 ? 0 : peakIdx] || (1 / days);
+      
+      const getDemand = (vol: number, phase: 'presale' | 'midsale' | 'aftersale') => {
+        let hV = ((vol * peakW) / 24.0) * peakFactor * safetyBuffer;
+        if (phase === 'presale') hV *= 1.5;
+        // 叠加所有修正因子
+        return (hV * complexityFactor * slFactor) / (cap[phase] * availabilityRate * (1 - scheduleLoss));
+      };
+
+      return Math.ceil(getDemand(newTotal, 'presale') + getDemand(newMid, 'midsale') + getDemand(newAft, 'aftersale'));
     };
     const sensitivityOv = calcStaff(-0.1, 0) - neededStaff; // 客单价降低10%的人员变化
     const sensitivityCr = calcStaff(0, 0.1) - neededStaff;  // 转化率提升10%的人员变化
@@ -396,6 +434,10 @@ export class ManpowerCalculator {
       presale_staff: peakDay.presale,
       midsale_staff: peakDay.midsale,
       aftersale_staff: peakDay.aftersale,
+
+      // 输入快照
+      target_sales: targetSales,
+      target_visitors: targetVisitors,
 
       // 话务量统计
       total_consult: totalPresale + totalMidsale + totalAftersale,

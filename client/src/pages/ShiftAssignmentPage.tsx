@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, List, Avatar, Tooltip, Empty, Table, Divider
+  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, List, Avatar, Tooltip, Empty, Table, Divider, Input
 } from '@arco-design/web-react';
 import { 
   IconSave, IconRefresh, IconFile, IconExclamationCircle, IconCheckCircle, IconCalendar, IconUser 
@@ -33,14 +33,33 @@ export const ShiftAssignmentPage = () => {
   const [currentDate, setCurrentDate] = useState(dayjs());
   const [allAssignments, setAllAssignments] = useState<any[]>([]); // 原始数据库记录
   
-  // 详情模态框
+  // 状态
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [activeDate, setActiveDate] = useState<dayjs.Dayjs | null>(null);
-  const [tempAssignments, setTempAssignments] = useState<any>({}); // { personnelId: shiftId }
+  const [tempAssignments, setTempAssignments] = useState<any>({});
+  const [personnelSearch, setPersonnelSearch] = useState(''); // 新增搜索状态
+  const [bulkShift, setBulkShift] = useState<number | undefined>(); // 新增批量排班状态
 
   // 校验模态框
   const [validationModalVisible, setValidationModalVisible] = useState(false);
   const [validationResults, setValidationResults] = useState<any[]>([]);
+
+  // 过滤后的人员列表
+  const filteredPersonnel = useMemo(() => {
+    return personnel.filter(p => 
+      p.name.toLowerCase().includes(personnelSearch.toLowerCase()) || 
+      (p.staff_id && p.staff_id.includes(personnelSearch))
+    );
+  }, [personnel, personnelSearch]);
+
+  const handleBulkSet = () => {
+    if (bulkShift === undefined) return;
+    const newAssignments = { ...tempAssignments };
+    filteredPersonnel.forEach(p => {
+      newAssignments[p.id] = bulkShift;
+    });
+    setTempAssignments(newAssignments);
+  };
 
   // 1. 初始化
   useEffect(() => {
@@ -88,6 +107,24 @@ export const ShiftAssignmentPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDateClick = (date: dayjs.Dayjs) => {
+    console.log('Date clicked:', date.format('YYYY-MM-DD'));
+    if (!selectedDeptId) {
+      Message.warning('请先选择一个部门');
+      return;
+    }
+    setActiveDate(date);
+    const dateStr = date.format('YYYY-MM-DD');
+    const assignments = allAssignments.filter(a => a.assignment_date === dateStr);
+    
+    const assignmentsMap: any = {};
+    assignments.forEach(a => {
+      assignmentsMap[a.personnel_id] = a.shift_id;
+    });
+    setTempAssignments(assignmentsMap);
+    setDetailModalVisible(true);
   };
 
   // 4. 关联报告
@@ -210,8 +247,25 @@ export const ShiftAssignmentPage = () => {
 
     if (!selectedDeptId) return null;
 
+    // 样式优化：高亮当前选中日期
+    const isActive = activeDate && date.isSame(activeDate, 'day');
+
     return (
-      <div style={{ padding: 4 }}>
+      <div 
+        style={{ 
+          height: '100%', 
+          padding: 4,
+          display: 'flex',
+          flexDirection: 'column',
+          background: isActive ? 'var(--color-primary-light-1)' : 'transparent',
+          borderRadius: 8,
+          cursor: 'pointer'
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDateClick(date);
+        }}
+      >
         <div style={{ minHeight: 48, display: 'flex', flexDirection: 'column', gap: 4 }}>
           {isPeak && <Badge status="error" text={<span style={{ color: 'var(--color-danger-6)', fontSize: 11, fontWeight: 700 }}>🔥 爆发点</span>} />}
           
@@ -238,8 +292,8 @@ export const ShiftAssignmentPage = () => {
   return (
     <div className='page-container' style={{ maxWidth: '100%', width: '100%' }}>
       <PageHeader
-        title='人员排班'
-        subtitle='日历化看板，对标智能测算需求，实现精准人力调度'
+        title='智能排班调度'
+        subtitle='基于人力精算结果的智能排班调度系统，实现客服人力资源的精准投放'
         icon='📅'
         extra={<Button icon={<IconRefresh />} onClick={fetchMonthAssignments}>刷新</Button>}
       />
@@ -323,7 +377,6 @@ export const ShiftAssignmentPage = () => {
         </Card>
       </div>
 
-      {/* 排班详情 Modal */}
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -339,9 +392,9 @@ export const ShiftAssignmentPage = () => {
         visible={detailModalVisible}
         onOk={checkAndSaveDaily}
         onCancel={() => setDetailModalVisible(false)}
-        width={600}
+        width="90%"
+        style={{ maxWidth: 1200, borderRadius: 16, top: 20 }}
         okText="校验并保存"
-        style={{ borderRadius: 16 }}
         confirmLoading={loading}
       >
         {/* 单日汇总统计 */}
@@ -365,35 +418,59 @@ export const ShiftAssignmentPage = () => {
           )}
         </div>
 
-        <List
-          style={{ maxHeight: 400, overflowY: 'auto' }}
-          dataSource={personnel}
-          render={(p: any) => (
-            <List.Item
-              key={p.id}
-              extra={
+        {/* 批量操作工具栏 */}
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+          <Input.Search
+            placeholder="搜索姓名或工号"
+            value={personnelSearch}
+            onChange={(val) => setPersonnelSearch(val)}
+            allowClear
+            style={{ width: 300 }}
+          />
+          <Select
+            placeholder="批量设置班次"
+            value={bulkShift}
+            onChange={setBulkShift}
+            allowClear
+            style={{ width: 200 }}
+          >
+            {shifts.map((s: any) => (
+              <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>
+            ))}
+          </Select>
+          <Button type="primary" onClick={handleBulkSet} disabled={bulkShift === undefined}>应用至 {filteredPersonnel.length} 名搜索结果</Button>
+        </div>
+
+        <Table
+          size="medium"
+          pagination={false}
+          scroll={{ y: 400 }}
+          dataSource={filteredPersonnel}
+          columns={[
+            { 
+              title: '姓名', 
+              render: (p) => <Text bold>{p.name || '未命名'}</Text>,
+              flex: 1 
+            },
+            { title: '工号', dataIndex: 'staff_id', flex: 1 },
+            { 
+              title: '班次分配', 
+              flex: 2,
+              render: (_, p) => (
                 <Select
                   placeholder="休息"
                   allowClear
                   value={tempAssignments[p.id] || undefined}
                   onChange={(v) => setTempAssignments((prev: any) => ({ ...prev, [p.id]: v }))}
-                  style={{ width: 140 }}
+                  style={{ width: '100%' }}
                 >
                   {shifts.map((s: any) => (
-                    <Select.Option key={s.id} value={s.id}>
-                      {s.shift_name}
-                    </Select.Option>
+                    <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>
                   ))}
                 </Select>
-              }
-            >
-              <List.Item.Meta
-                avatar={<Avatar size={32} style={{ background: 'var(--color-primary-light-1)', color: 'var(--color-primary-6)' }}><IconUser /></Avatar>}
-                title={<Text bold>{p.name}</Text>}
-                description={p.staff_id || '无工号'}
-              />
-            </List.Item>
-          )}
+              )
+            }
+          ]}
         />
       </Modal>
 

@@ -409,8 +409,8 @@ export const HistoryDataPage = () => {
     <div className='page-container' style={{ maxWidth: 1200, margin: '0 auto', width: '100%' }}>
       {/* 页面头部 */}
       <PageHeader
-        title='业务参考'
-        subtitle='多项目/多店铺的历史业务数据管理与趋势分析'
+        title='业务历史看板'
+        subtitle='多维度历史业务指标管理与全景趋势分析，为测算建模提供数据支撑'
         icon='🗂️'
         extra={
           <Space size='medium'>

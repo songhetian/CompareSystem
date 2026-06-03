@@ -153,14 +153,14 @@ class ManpowerCalculator {
       return weights;
     }
   }
-  static calculateWithShifts(targetSales, days = 30, eventType = null, eventDates = [dayjs()], calcStartDate = null, params, promotionFactor, targetVisitors, minStaff = 1, historyData, peakDates) {
+  static calculateWithShifts(targetSales, days = 30, eventType = null, eventDates = [dayjs()], calcStartDate = null, params, promotionFactor, targetVisitors, minStaff = 1, historyData, peakDates = []) {
     const isDaily = (eventType === null || eventType.includes("日常")) && eventDates.length === 0;
     const startDate = calcStartDate || dayjs(Math.min(...eventDates.map((d) => d.valueOf()))).subtract(5, "day");
     const p = (k, d) => params[k] ?? d;
     const avgOv = p("avg_order_value", 160);
     const peakFactor = p("peak_factor", 1.2);
     const safetyBuffer = p("safety_buffer", 1.15);
-    p("peak_day_factor", 1.5);
+    const peakDayFactor = p("peak_day_factor", 1.5);
     const baseDailyVisitors = targetVisitors ?? p("daily_visitors", 1e3);
     const vToPRate = p("visitor_to_presale", 0.25);
     const offsets = {
@@ -177,10 +177,40 @@ class ManpowerCalculator {
       m_ratio: p("midsale_ratio", 0.35),
       p_to_a: p("payment_to_aftersale", 0.15)
     };
-    const cap = {
+    const baseHandleCapacity = {
       presale: 60 / p("presale_handle_time", 4.5) * p("presale_saturation", 0.78),
       midsale: 60 / p("midsale_handle_time", 3) * p("midsale_saturation", 0.82),
       aftersale: 60 / p("aftersale_handle_time", 6.5) * p("aftersale_saturation", 0.72)
+    };
+    const maxConcurrent = p("max_concurrent_sessions", 3);
+    const concurrentLoss = p("concurrent_efficiency_loss", 0.15);
+    const concurrentMultiplier = maxConcurrent * (1 - concurrentLoss);
+    const simpleRatio = p("simple_problem_ratio", 0.5);
+    const simpleFactor = p("simple_time_factor", 0.6);
+    const complexRatio = p("complex_problem_ratio", 0.15);
+    const complexFactor = p("complex_time_factor", 2);
+    const normalRatio = 1 - simpleRatio - complexRatio;
+    const complexityFactor = simpleRatio * simpleFactor + normalRatio * 1 + complexRatio * complexFactor;
+    const noviceRatio = p("novice_ratio", 0.2);
+    const noviceEff = p("novice_efficiency", 0.6);
+    const expertRatio = p("expert_ratio", 0.15);
+    const expertEff = p("expert_efficiency", 1.4);
+    const normalStaffRatio = 1 - noviceRatio - expertRatio;
+    const teamEfficiency = noviceRatio * noviceEff + normalStaffRatio * 1 + expertRatio * expertEff;
+    const aiUsage = p("ai_assist_usage", 0.3);
+    const aiGain = p("ai_efficiency_gain", 1.3);
+    const systemToolEfficiency = aiUsage * aiGain + (1 - aiUsage) * 1;
+    const availabilityRate = p("actual_availability_rate", 0.85);
+    const responseRate = p("response_rate", 0.95);
+    const scheduleLoss = p("schedule_inefficiency", 0.08);
+    const workStateMultiplier = responseRate;
+    const fcr = p("first_call_resolution", 0.85);
+    const slFactor = p("service_level_factor", 1.1);
+    const repeatCallFactor = 2 - fcr;
+    const cap = {
+      presale: baseHandleCapacity.presale * concurrentMultiplier * teamEfficiency * systemToolEfficiency * workStateMultiplier,
+      midsale: baseHandleCapacity.midsale * concurrentMultiplier * teamEfficiency * systemToolEfficiency * workStateMultiplier,
+      aftersale: baseHandleCapacity.aftersale * concurrentMultiplier * teamEfficiency * systemToolEfficiency * workStateMultiplier
     };
     let eventF = 1;
     if (promotionFactor !== void 0 && promotionFactor > 0) {
@@ -193,9 +223,14 @@ class ManpowerCalculator {
       }
     }
     const ordersFromSales = targetSales / avgOv * eventF;
-    const presaleFromSales = ordersFromSales / (conversion.c_to_o * conversion.o_to_p);
-    const visitorPresaleBaseline = baseDailyVisitors * days * vToPRate;
-    const totalPresale = Math.max(presaleFromSales, visitorPresaleBaseline);
+    const presaleFromSales = ordersFromSales / (conversion.c_to_o * conversion.o_to_p) * repeatCallFactor;
+    const visitorPresaleBaseline = baseDailyVisitors * days * vToPRate * repeatCallFactor;
+    let totalPresale = 0;
+    if (targetSales > 0) {
+      totalPresale = Math.max(presaleFromSales, visitorPresaleBaseline * 0.3);
+    } else {
+      totalPresale = visitorPresaleBaseline;
+    }
     const totalMidsale = totalPresale * conversion.m_ratio;
     const totalAftersale = totalPresale * conversion.c_to_o * conversion.o_to_p * conversion.p_to_a;
     let wPre;
@@ -208,17 +243,24 @@ class ManpowerCalculator {
       wAft = histWeights;
     } else {
       const numPeaks = eventDates.length;
-      wPre = new Array(days).fill(0);
-      wMid = new Array(days).fill(0);
-      wAft = new Array(days).fill(0);
-      for (const ed of eventDates) {
-        const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
-        const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
-        const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
-        for (let i = 0; i < days; i++) {
-          wPre[i] += wp[i] / numPeaks;
-          wMid[i] += wm[i] / numPeaks;
-          wAft[i] += wa[i] / numPeaks;
+      if (numPeaks === 0) {
+        const uniformWeight = 1 / days;
+        wPre = new Array(days).fill(uniformWeight);
+        wMid = new Array(days).fill(uniformWeight);
+        wAft = new Array(days).fill(uniformWeight);
+      } else {
+        wPre = new Array(days).fill(0);
+        wMid = new Array(days).fill(0);
+        wAft = new Array(days).fill(0);
+        for (const ed of eventDates) {
+          const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
+          const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
+          const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
+          for (let i = 0; i < days; i++) {
+            wPre[i] += wp[i] / numPeaks;
+            wMid[i] += wm[i] / numPeaks;
+            wAft[i] += wa[i] / numPeaks;
+          }
         }
       }
     }
@@ -227,24 +269,28 @@ class ManpowerCalculator {
       const vP = totalPresale * wPre[i];
       const vM = totalMidsale * wMid[i];
       const vA = totalAftersale * wAft[i];
+      const currentDateStr = startDate.add(i, "day").format("YYYY-MM-DD");
+      const isPeakDay = peakDates.some((pd) => pd.format("YYYY-MM-DD") === currentDateStr);
       const getRawDemand = (vol, phase) => {
         let hV = vol / 24 * peakFactor * safetyBuffer;
         if (phase === "presale") hV *= 1.5;
-        return cap[phase] > 0 ? hV / cap[phase] : 0;
+        return cap[phase] > 0 ? hV * complexityFactor / (cap[phase] * availabilityRate) : 0;
       };
       const rawP = getRawDemand(vP, "presale");
       const rawM = getRawDemand(vM, "midsale");
       const rawA = getRawDemand(vA, "aftersale");
-      const currentDateStr = startDate.add(i, "day").format("YYYY-MM-DD");
-      const isPeakDay = eventDates.some((ed) => ed.format("YYYY-MM-DD") === currentDateStr);
+      const peakMultiplier = isPeakDay ? peakDayFactor : 1;
+      const finalRawP = rawP * peakMultiplier * slFactor / (1 - scheduleLoss);
+      const finalRawM = rawM * peakMultiplier * slFactor / (1 - scheduleLoss);
+      const finalRawA = rawA * peakMultiplier * slFactor / (1 - scheduleLoss);
       dailyResults.push({
         date: startDate.add(i, "day").format("MM-DD"),
         fullDate: currentDateStr,
         isPeakDay,
-        staff: Math.ceil(rawP + rawM + rawA),
-        presale: Math.ceil(rawP),
-        midsale: Math.ceil(rawM),
-        aftersale: Math.ceil(rawA),
+        staff: Math.ceil(finalRawP + finalRawM + finalRawA),
+        presale: Math.ceil(finalRawP),
+        midsale: Math.ceil(finalRawM),
+        aftersale: Math.ceil(finalRawA),
         vol_pre: vP,
         vol_mid: vM,
         vol_after: vA
@@ -257,42 +303,31 @@ class ManpowerCalculator {
     const hourlyMidsale = [];
     const hourlyAftersale = [];
     const hourlyTotal = [];
-    const presaleBurstStart = p("presale_burst_start", 10);
-    const presaleBurstEnd = p("presale_burst_end", 12);
-    const presaleBurstFactor = p("presale_burst_factor", 1.9);
-    const midsaleBurstStart = p("midsale_burst_start", 15);
-    const midsaleBurstEnd = p("midsale_burst_end", 17);
-    const midsaleBurstFactor = p("midsale_burst_factor", 2.3);
-    const aftersaleBurstStart = p("aftersale_burst_start", 20);
-    const aftersaleBurstEnd = p("aftersale_burst_end", 22);
-    const aftersaleBurstFactor = p("aftersale_burst_factor", 2.6);
     for (let hour = 0; hour < 24; hour++) {
-      const basePresale = peakDay.presale / 24;
-      const baseMidsale = peakDay.midsale / 24;
-      const baseAftersale = peakDay.aftersale / 24;
-      const presaleHour = hour >= presaleBurstStart && hour < presaleBurstEnd ? basePresale * presaleBurstFactor : basePresale;
-      const midsaleHour = hour >= midsaleBurstStart && hour < midsaleBurstEnd ? baseMidsale * midsaleBurstFactor : baseMidsale;
-      const aftersaleHour = hour >= aftersaleBurstStart && hour < aftersaleBurstEnd ? baseAftersale * aftersaleBurstFactor : baseAftersale;
-      let nightBoost = 1;
-      if (hour < 2 || hour >= 20) nightBoost = 1.3;
-      hourlyPresale.push(presaleHour * nightBoost);
+      const presaleHour = peakDay.presale / 24;
+      const midsaleHour = peakDay.midsale / 24;
+      const aftersaleHour = peakDay.aftersale / 24;
+      hourlyPresale.push(presaleHour);
       hourlyMidsale.push(midsaleHour);
       hourlyAftersale.push(aftersaleHour);
-      hourlyTotal.push(presaleHour * nightBoost + midsaleHour + aftersaleHour);
+      hourlyTotal.push(presaleHour + midsaleHour + aftersaleHour);
     }
     const calcStaff = (ovDelta, crDelta) => {
       const newOv = avgOv * (1 + ovDelta);
       const newCr = conversion.c_to_o * (1 + crDelta);
       const newOrders = targetSales / newOv * eventF;
-      const newPresale = newOrders / (newCr * conversion.o_to_p);
+      const newPresale = newOrders / (newCr * conversion.o_to_p) * repeatCallFactor;
       const newTotal = Math.max(newPresale, visitorPresaleBaseline);
       const newMid = newTotal * conversion.m_ratio;
       const newAft = newTotal * newCr * conversion.o_to_p * conversion.p_to_a;
-      const peakW = wPre[dailyResults.findIndex((r) => r.staff === theoreticalPeak)] || 1 / days;
-      const rP = newTotal * peakW / 24 * peakFactor * safetyBuffer * 1.5 / cap.presale;
-      const rM = newMid * peakW / 24 * peakFactor * safetyBuffer / cap.midsale;
-      const rA = newAft * peakW / 24 * peakFactor * safetyBuffer / cap.aftersale;
-      return Math.ceil(rP + rM + rA);
+      const peakIdx = dailyResults.findIndex((r) => r.staff === theoreticalPeak);
+      const peakW = wPre[peakIdx === -1 ? 0 : peakIdx] || 1 / days;
+      const getDemand = (vol, phase) => {
+        let hV = vol * peakW / 24 * peakFactor * safetyBuffer;
+        if (phase === "presale") hV *= 1.5;
+        return hV * complexityFactor * slFactor / (cap[phase] * availabilityRate * (1 - scheduleLoss));
+      };
+      return Math.ceil(getDemand(newTotal, "presale") + getDemand(newMid, "midsale") + getDemand(newAft, "aftersale"));
     };
     const sensitivityOv = calcStaff(-0.1, 0) - neededStaff;
     const sensitivityCr = calcStaff(0, 0.1) - neededStaff;
@@ -303,6 +338,9 @@ class ManpowerCalculator {
       presale_staff: peakDay.presale,
       midsale_staff: peakDay.midsale,
       aftersale_staff: peakDay.aftersale,
+      // 输入快照
+      target_sales: targetSales,
+      target_visitors: targetVisitors,
       // 话务量统计
       total_consult: totalPresale + totalMidsale + totalAftersale,
       daily_consult: (totalPresale + totalMidsale + totalAftersale) / days,
@@ -395,6 +433,8 @@ class DBManager {
         scheme_name TEXT NOT NULL,
         params_json TEXT NOT NULL,
         result_json TEXT,
+        start_date TEXT,
+        end_date TEXT,
         description TEXT,
         create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -515,6 +555,25 @@ class DBManager {
     if (promoCount.count === 0) {
       this._seedPromotions();
     }
+    const schemeCount = this._db.prepare("SELECT COUNT(*) as count FROM parameter_schemes").get();
+    if (schemeCount.count === 0) {
+      this._seedParameterSchemes();
+    } else {
+      const schemes = this._db.prepare("SELECT id, params_json FROM parameter_schemes").all();
+      for (const scheme of schemes) {
+        try {
+          const params = JSON.parse(scheme.params_json);
+          const hasParams = params && Object.keys(params).length > 1;
+          if (!hasParams) {
+            console.log(`🔧 修复空参数方案 ID: ${scheme.id}`);
+            this._db.prepare("UPDATE parameter_schemes SET params_json = ? WHERE id = ?").run(JSON.stringify(this._getDefaultParams()), scheme.id);
+          }
+        } catch (e) {
+          console.log(`⚠️  方案 ${scheme.id} 参数格式错误，修复中...`);
+          this._db.prepare("UPDATE parameter_schemes SET params_json = ? WHERE id = ?").run(JSON.stringify(this._getDefaultParams()), scheme.id);
+        }
+      }
+    }
   }
   _seedData() {
     const insert = this._db.prepare("INSERT INTO sys_params (param_name, param_key, param_value, category) VALUES (?, ?, ?, ?)");
@@ -528,6 +587,149 @@ class DBManager {
     insert.run("A级活动(会员日)", 1.9, "常规平台级活动");
     insert.run("B级活动(品类日)", 1.5, "品类促销活动");
     insert.run("日常运营", 1, "无活动的日常流量");
+  }
+  _getDefaultParams() {
+    return {
+      // 基础业务参数
+      avg_order_value: 160,
+      daily_visitors: 3800,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      // 转化漏斗
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      payment_to_aftersale: 0.15,
+      midsale_ratio: 0.35,
+      // 岗位效能
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72,
+      // 并发处理能力
+      max_concurrent_sessions: 3,
+      concurrent_efficiency_loss: 0.15,
+      // 员工能力分布
+      novice_ratio: 0.2,
+      novice_efficiency: 0.6,
+      expert_ratio: 0.15,
+      expert_efficiency: 1.4,
+      // 工作状态
+      actual_availability_rate: 0.85,
+      response_rate: 0.92,
+      // 业务复杂度
+      simple_problem_ratio: 0.5,
+      simple_time_factor: 0.6,
+      complex_problem_ratio: 0.15,
+      complex_time_factor: 2,
+      // 阶段时间偏移
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      // 参数分类配置
+      _config: [
+        {
+          title: "基础业务参数",
+          icon: "💼",
+          color: "#3b82f6",
+          params: [
+            { key: "avg_order_value", label: "平均客单价", min: 1, max: 1e5, step: 10, unit: "元", default: 160 },
+            { key: "daily_visitors", label: "日均访客数", min: 100, max: 1e5, step: 100, unit: "人", default: 3800 },
+            { key: "peak_factor", label: "高峰系数", min: 1, max: 2, step: 0.1, unit: "", default: 1.2 },
+            { key: "safety_buffer", label: "安全冗余", min: 1, max: 2, step: 0.05, unit: "", default: 1.15 }
+          ]
+        },
+        {
+          title: "转化漏斗",
+          icon: "🎯",
+          color: "#8b5cf6",
+          params: [
+            { key: "visitor_to_presale", label: "访客→咨询率", min: 0, max: 1, step: 0.01, unit: "%", default: 0.25 },
+            { key: "consult_to_order", label: "咨询→下单率", min: 0, max: 1, step: 0.01, unit: "%", default: 0.6 },
+            { key: "order_to_payment", label: "下单→付款率", min: 0, max: 1, step: 0.01, unit: "%", default: 0.9 },
+            { key: "payment_to_aftersale", label: "付款→售后率", min: 0, max: 1, step: 0.01, unit: "%", default: 0.15 },
+            { key: "midsale_ratio", label: "售中占比", min: 0, max: 1, step: 0.01, unit: "%", default: 0.35 }
+          ]
+        },
+        {
+          title: "岗位效能",
+          icon: "⚡",
+          color: "#10b981",
+          params: [
+            { key: "presale_handle_time", label: "售前处理时长", min: 1, max: 15, step: 0.5, unit: "分钟", default: 4.5 },
+            { key: "presale_saturation", label: "售前饱和度", min: 0.5, max: 1, step: 0.01, unit: "%", default: 0.78, description: "客服实际工作时间占排班时间的比例，50%~100%" },
+            { key: "midsale_handle_time", label: "售中处理时长", min: 1, max: 15, step: 0.5, unit: "分钟", default: 3 },
+            { key: "midsale_saturation", label: "售中饱和度", min: 0.5, max: 1, step: 0.01, unit: "%", default: 0.82, description: "客服实际工作时间占排班时间的比例，50%~100%" },
+            { key: "aftersale_handle_time", label: "售后处理时长", min: 1, max: 15, step: 0.5, unit: "分钟", default: 6.5 },
+            { key: "aftersale_saturation", label: "售后饱和度", min: 0.5, max: 1, step: 0.01, unit: "%", default: 0.72, description: "客服实际工作时间占排班时间的比例，50%~100%" }
+          ]
+        },
+        {
+          title: "并发处理能力",
+          icon: "🔄",
+          color: "#f59e0b",
+          params: [
+            { key: "max_concurrent_sessions", label: "单人最大并发数", min: 1, max: 8, step: 1, unit: "个", default: 3, description: "客服同时处理的会话数。在线客服通常2-4个，电话客服为1个" },
+            { key: "concurrent_efficiency_loss", label: "并发效率衰减", min: 0, max: 0.5, step: 0.05, unit: "%", default: 0.15, description: "并发数增加时的效率损失。如并发3个时效率为85%" }
+          ]
+        },
+        {
+          title: "员工能力分布",
+          icon: "👥",
+          color: "#8b5cf6",
+          params: [
+            { key: "novice_ratio", label: "新手员工占比", min: 0, max: 0.6, step: 0.05, unit: "%", default: 0.2, description: "入职3个月内的新员工比例" },
+            { key: "novice_efficiency", label: "新手效率系数", min: 0.4, max: 1, step: 0.05, unit: "", default: 0.6, description: "新手处理速度是标准的60%" },
+            { key: "expert_ratio", label: "专家员工占比", min: 0, max: 0.4, step: 0.05, unit: "%", default: 0.15, description: "工作1年以上的资深员工比例" },
+            { key: "expert_efficiency", label: "专家效率系数", min: 1, max: 2, step: 0.1, unit: "", default: 1.4, description: "专家处理速度是标准的1.4倍" }
+          ]
+        },
+        {
+          title: "工作状态",
+          icon: "📊",
+          color: "#06b6d4",
+          params: [
+            { key: "actual_availability_rate", label: "实际在岗率", min: 0.6, max: 0.95, step: 0.05, unit: "%", default: 0.85, description: "扣除休息、培训、会议后的实际工作时间占比" },
+            { key: "response_rate", label: "即时响应率", min: 0.7, max: 1, step: 0.05, unit: "%", default: 0.92, description: "有咨询时能立即响应的概率" }
+          ]
+        },
+        {
+          title: "业务复杂度",
+          icon: "🎯",
+          color: "#ec4899",
+          params: [
+            { key: "simple_problem_ratio", label: "简单问题占比", min: 0.2, max: 0.8, step: 0.05, unit: "%", default: 0.5, description: "物流查询、尺码咨询等简单问题的比例" },
+            { key: "simple_time_factor", label: "简单问题时长系数", min: 0.3, max: 0.8, step: 0.05, unit: "", default: 0.6, description: "简单问题处理时长是标准的60%" },
+            { key: "complex_problem_ratio", label: "复杂问题占比", min: 0.05, max: 0.3, step: 0.05, unit: "%", default: 0.15, description: "投诉、疑难问题等复杂问题的比例" },
+            { key: "complex_time_factor", label: "复杂问题时长系数", min: 1.5, max: 3, step: 0.1, unit: "", default: 2, description: "复杂问题处理时长是标准的2倍" }
+          ]
+        },
+        {
+          title: "阶段时间偏移",
+          icon: "⏰",
+          color: "#6366f1",
+          params: [
+            { key: "presale_time_offset", label: "售前提前天数", min: 0, max: 15, step: 1, unit: "天", default: 2, description: "售前咖询高峰早于活动日的天数，0 表示当天" },
+            { key: "midsale_time_offset", label: "售中延迟天数", min: 0, max: 5, step: 1, unit: "天", default: 0, description: "售中流量相对活动日的延迟，0 表示当天" },
+            { key: "aftersale_time_offset", label: "售后延迟天数", min: 0, max: 15, step: 1, unit: "天", default: 3, description: "售后咨询高峰晚于活动日的天数" }
+          ]
+        }
+      ]
+    };
+  }
+  _seedParameterSchemes() {
+    const insert = this._db.prepare(
+      "INSERT INTO parameter_schemes (scheme_name, params_json, is_default, description) VALUES (?, ?, ?, ?)"
+    );
+    insert.run(
+      "标准参数方案",
+      JSON.stringify(this._getDefaultParams()),
+      1,
+      "系统预设的标准参数配置，适用于大多数电商客服场景"
+    );
+    console.log("✅ 默认参数方案已创建");
   }
   query(sql, params = []) {
     return this._db.prepare(sql).all(...params);
@@ -543,6 +745,12 @@ ipcMain.handle("get:history", async (_event) => {
 });
 ipcMain.handle("delete:history", async (_event, id) => {
   return dbManager.execute("DELETE FROM historical_schemes WHERE id = ?", [id]);
+});
+ipcMain.handle("add:history", async (_event, data) => {
+  return dbManager.execute(
+    "INSERT INTO historical_schemes (scheme_name, params_json, result_json, description, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)",
+    [data.name, JSON.stringify(data.params), JSON.stringify(data.result), data.desc, data.startDate || null, data.endDate || null]
+  );
 });
 ipcMain.handle("get:schemes", async (_event) => {
   return dbManager.query("SELECT * FROM parameter_schemes ORDER BY is_default DESC, update_time DESC", []);
@@ -646,6 +854,16 @@ ipcMain.handle("update:personnel", async (_event, data) => {
 });
 ipcMain.handle("delete:personnel", async (_event, id) => {
   return dbManager.execute("UPDATE personnel SET status = 0 WHERE id = ?", [id]);
+});
+ipcMain.handle("batch:personnel", async (_event, personnelList) => {
+  const stmt = dbManager.db.prepare("INSERT OR IGNORE INTO personnel (name, staff_id, dept_id, position, phone) VALUES (?, ?, ?, ?, ?)");
+  const transaction = dbManager.db.transaction((data) => {
+    for (const p of data) {
+      stmt.run(p.name, p.staffId, p.deptId, p.position, p.phone);
+    }
+  });
+  transaction(personnelList);
+  return { success: true, count: personnelList.length };
 });
 ipcMain.handle("get:assignments", async (_event, startDate, endDate) => {
   return dbManager.query(

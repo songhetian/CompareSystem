@@ -10,12 +10,13 @@ import {
   PointElement,
   LineElement,
   BarElement,
+  ArcElement,
   Title as ChartTitle,
   Tooltip,
   Legend,
   Filler
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Bar, Pie } from 'react-chartjs-2';
 import { BudgetFormData } from './types';
 
 ChartJS.register(
@@ -24,6 +25,7 @@ ChartJS.register(
   PointElement,
   LineElement,
   BarElement,
+  ArcElement,
   ChartTitle,
   Tooltip,
   Legend,
@@ -51,14 +53,14 @@ export const ResultStep = ({ result, formData, handleReset, handleExport }: Resu
         name: reportName,
         params: { 
           ...result.params,
-          plannedShiftIds: formData.shifts // 保存当时规划使用的班次ID列表
+          plannedShiftIds: formData.selectedShifts // 保存当时规划使用的班次ID列表
         },
         result: result,
         desc: `基于目标值 ${formData.targetValue} 的智能测算结果`,
         startDate: formData.dateRange[0],
         endDate: formData.dateRange[1]
       });
-      Message.success('已成功保存至“测算报告”');
+      Message.success('已成功保存至“测算分析报告”');
     } catch (err) {
       Message.error('保存失败');
     } finally {
@@ -68,96 +70,95 @@ export const ResultStep = ({ result, formData, handleReset, handleExport }: Resu
 
   const usingHistory = formData.useHistoryData && !!formData.historyProjectId;
 
-  // 每日人力趋势图（使用 daily_results）
-  const dailyLabels = (result.daily_results || []).map((d: any, i: number) =>
-    usingHistory ? `第 ${i + 1} 天` : d.date
-  );
+  // 每日人力趋势图 - 堆叠柱状图显示售前/售中/售后
+  // X轴使用完整日期，不再使用简化的"第N天"格式
+  const dailyLabels = (result.daily_results || []).map((d: any) => d.fullDate || d.date);
 
-  // 高峰日高亮：高峰日用橙色，普通日用蓝色
-  const totalStaffData = (result.daily_results || []).map((d: any) => d.isPeakDay ? null : d.staff);
-  const peakDayStaffData = (result.daily_results || []).map((d: any) => d.isPeakDay ? d.staff : null);
-
+  // 使用堆叠柱状图，分别显示售前、售中、售后人数
   const dailyChartData = {
     labels: dailyLabels,
     datasets: [
       {
-        label: '普通日人力需求 (人)',
-        data: totalStaffData,
-        backgroundColor: 'rgba(22,93,255,0.7)',
-        borderColor: '#165DFF',
-        borderWidth: 1,
+        label: '售前人数',
+        data: (result.daily_results || []).map((d: any) => d.presale),
+        backgroundColor: '#8b5cf6',
         borderRadius: 4,
+        barPercentage: 0.6,  // 控制柱子宽度
+        categoryPercentage: 0.8,  // 控制类别间距
       },
       {
-        label: '高峰日人力需求 (人)',
-        data: peakDayStaffData,
-        backgroundColor: 'rgba(245,63,63,0.85)',
-        borderColor: '#F53F3F',
-        borderWidth: 2,
+        label: '售中人数',
+        data: (result.daily_results || []).map((d: any) => d.midsale),
+        backgroundColor: '#f59e0b',
         borderRadius: 4,
+        barPercentage: 0.6,
+        categoryPercentage: 0.8,
+      },
+      {
+        label: '售后人数',
+        data: (result.daily_results || []).map((d: any) => d.aftersale),
+        backgroundColor: '#10b981',
+        borderRadius: 4,
+        barPercentage: 0.6,
+        categoryPercentage: 0.8,
       },
     ],
   };
 
-  // 高峰日 tooltip 后缀提示
+  // 堆叠柱状图配置 - 高峰日在tooltip中标注
   const dailyChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top' as const },
+      legend: { 
+        position: 'top' as const,
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: { size: 13 }
+        }
+      },
       tooltip: {
         mode: 'index' as const,
         intersect: false,
         callbacks: {
-          afterTitle: (items: any) => {
+          title: (items: any) => {
             const idx = items[0]?.dataIndex;
             const dr = result.daily_results?.[idx];
-            if (!dr) return '';
-            const parts = [];
-            if (dr.isPeakDay) parts.push('🔥 高峰日');
-            if (usingHistory) parts.push(`(原始日期: ${dr.date})`);
-            return parts.join(' ');
+            if (!dr) return items[0]?.label || '';
+            let title = dr.fullDate || dr.date; // 使用完整日期
+            if (dr.isPeakDay) title += ' 🔥 高峰日';
+            return title;
+          },
+          footer: (items: any) => {
+            const total = items.reduce((sum: number, item: any) => sum + item.parsed.y, 0);
+            return `总需求: ${total} 人`;
           }
         }
       },
     },
     scales: {
-      y: { beginAtZero: true, title: { display: true, text: '人力需求 (人)' } },
-      x: { grid: { display: false }, stacked: false }
-    },
-  };
-
-  // 24小时分布图
-  const hourlyLabels = Array.from({ length: 24 }, (_, i) => `${i}:00`);
-  const hourlyChartData = {
-    labels: hourlyLabels,
-    datasets: [
-      {
-        fill: true,
-        label: '总排班需求 (人)',
-        data: result.hourly_total,
-        borderColor: '#165DFF',
-        backgroundColor: 'rgba(22,93,255,0.1)',
-        tension: 0.4,
-        borderWidth: 2,
-        pointRadius: 1,
-        pointHoverRadius: 4,
+      y: { 
+        stacked: true,
+        beginAtZero: true, 
+        title: { display: true, text: '人力需求 (人)' },
+        ticks: {
+          stepSize: 1,
+          font: { size: 12 }
+        }
+      },
+      x: { 
+        stacked: true,
+        grid: { display: false },
+        ticks: {
+          font: { size: 10 },
+          maxRotation: 45,
+          minRotation: 45,  // 强制45度旋转，避免日期重叠
+          autoSkip: true,
+          maxTicksLimit: 30  // 最多显示30个刻度
+        }
       }
-    ],
-  };
-
-  const hourlyChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { mode: 'index' as const, intersect: false },
     },
-    scales: {
-      y: { beginAtZero: true, title: { display: true, text: '所需人力 (人)' } },
-      x: { grid: { display: false } }
-    },
-    interaction: { mode: 'nearest' as const, axis: 'x' as const, intersect: false }
   };
 
   return (
@@ -209,11 +210,49 @@ export const ResultStep = ({ result, formData, handleReset, handleExport }: Resu
         </Card>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-        {/* 24小时排班分布 */}
-        <Card bordered={false} title='24小时排班需求分布（峰值日）' style={{ borderRadius: 12, boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-          <div style={{ height: 280, width: '100%' }}>
-            <Line data={hourlyChartData} options={hourlyChartOptions} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {/* 岗位人力配比饼图 */}
+        <Card bordered={false} title='岗位人力配比' style={{ borderRadius: 12, boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+          <div style={{ height: 280, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '80%', height: '100%' }}>
+              <Pie 
+                data={{
+                  labels: ['售前咨询', '售中处理', '售后服务'],
+                  datasets: [{
+                    data: [result.presale_staff, result.midsale_staff, result.aftersale_staff],
+                    backgroundColor: ['#8b5cf6', '#f59e0b', '#10b981'],
+                    borderColor: ['#7c3aed', '#d97706', '#059669'],
+                    borderWidth: 2,
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'bottom' as const,
+                      labels: {
+                        usePointStyle: true,
+                        padding: 15,
+                        font: { size: 13 }
+                      }
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: (context: any) => {
+                          const total = result.presale_staff + result.midsale_staff + result.aftersale_staff;
+                          const percentage = ((context.parsed / total) * 100).toFixed(1);
+                          return `${context.label}: ${context.parsed}人 (${percentage}%)`;
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--color-fill-2)', borderRadius: 6, fontSize: 12, color: 'var(--color-text-3)', textAlign: 'center' }}>
+            基于峰值日的话务量分布和各岗位处理时长计算
           </div>
         </Card>
 

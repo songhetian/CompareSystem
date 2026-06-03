@@ -42,9 +42,45 @@ export const BudgetPage = () => {
     historyProjectId: null,
   });
 
+  // 从localStorage恢复表单数据
+  useEffect(() => {
+    const savedFormData = localStorage.getItem('budgetFormData');
+    const savedCurrentStep = localStorage.getItem('budgetCurrentStep');
+    
+    if (savedFormData) {
+      try {
+        const parsedData = JSON.parse(savedFormData);
+        setFormData(parsedData);
+      } catch (err) {
+        console.error('恢复表单数据失败:', err);
+      }
+    }
+    
+    if (savedCurrentStep) {
+      try {
+        setCurrentStep(parseInt(savedCurrentStep, 10));
+      } catch (err) {
+        console.error('恢复步骤失败:', err);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
   }, []);
+
+  // 保存表单数据到localStorage（防抖）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      localStorage.setItem('budgetFormData', JSON.stringify(formData));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData]);
+
+  // 保存当前步骤到localStorage
+  useEffect(() => {
+    localStorage.setItem('budgetCurrentStep', currentStep.toString());
+  }, [currentStep]);
 
   const loadData = async () => {
     try {
@@ -141,7 +177,7 @@ export const BudgetPage = () => {
         params: formData.schemeId ? JSON.parse(schemes.find((s) => s.id === formData.schemeId)?.params_json || '{}') : {},
         selectedShifts: formData.selectedShifts,
         promotionFactor: selectedPromo?.factor,
-        minStaff: formData.selectedShifts.length || 1,
+        minStaff: 1,  // 改为固定值1，不再受班次数量影响，让算法自然计算
         historyProjectId: formData.useHistoryData ? formData.historyProjectId : null,
       };
 
@@ -160,6 +196,8 @@ export const BudgetPage = () => {
     if (!result) return Message.warning('暂无测算结果');
     try {
       const workbook = new ExcelJS.Workbook();
+      
+      // ========== 第1个Sheet：测算汇总 ==========
       const summarySheet = workbook.addWorksheet('测算汇总');
 
       summarySheet.mergeCells('A1:D1');
@@ -167,24 +205,90 @@ export const BudgetPage = () => {
       titleCell.value = '人力需求测算报告';
       titleCell.font = { size: 16, bold: true };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F0FF' } };
 
       summarySheet.addRow([]);
       summarySheet.addRow(['测算时间', dayjs().format('YYYY-MM-DD HH:mm:ss')]);
       summarySheet.addRow(['测算周期', `${formData.dateRange[0]} 至 ${formData.dateRange[1]}`]);
       summarySheet.addRow(['驱动方式', formData.driveMode === 'sales' ? '按销售额' : '按访客数']);
       summarySheet.addRow(['目标数值', formData.targetValue]);
+      summarySheet.addRow(['高峰日数量', formData.peakDates.length + ' 天']);
       summarySheet.addRow([]);
 
       summarySheet.addRow(['核心指标', '', '', '']);
-      summarySheet.getRow(8).font = { bold: true };
+      summarySheet.getRow(9).font = { bold: true };
+      summarySheet.getRow(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+      
       summarySheet.addRow(['建议总编制', result.needed_staff, '人']);
       summarySheet.addRow(['售前人员', result.presale_staff, '人']);
       summarySheet.addRow(['售中人员', result.midsale_staff, '人']);
       summarySheet.addRow(['售后人员', result.aftersale_staff, '人']);
       summarySheet.addRow(['日均接待量', Math.round(result.daily_consult), '次']);
+      summarySheet.addRow(['理论峰值', result.theoretical_peak, '人']);
 
       summarySheet.columns = [{ width: 20 }, { width: 30 }, { width: 15 }, { width: 15 }];
 
+      // ========== 第2个Sheet：每日人力需求明细 ==========
+      const dailySheet = workbook.addWorksheet('每日人力需求明细');
+      
+      // 表头
+      const dailyHeaders = ['日期', '是否高峰日', '总需求(人)', '售前(人)', '售中(人)', '售后(人)', '售前话务量', '售中话务量', '售后话务量'];
+      const dailyHeaderRow = dailySheet.addRow(dailyHeaders);
+      dailyHeaderRow.font = { bold: true };
+      dailyHeaderRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
+      dailyHeaderRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // 数据行
+      (result.daily_results || []).forEach((day: any) => {
+        const row = dailySheet.addRow([
+          day.fullDate || day.date,
+          day.isPeakDay ? '是 🔥' : '否',
+          day.staff,
+          day.presale,
+          day.midsale,
+          day.aftersale,
+          Math.round(day.vol_pre || 0),
+          Math.round(day.vol_mid || 0),
+          Math.round(day.vol_after || 0)
+        ]);
+        
+        // 高峰日高亮
+        if (day.isPeakDay) {
+          row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE6E6' } };
+          });
+        }
+      });
+
+      // 设置列宽
+      dailySheet.columns = [
+        { width: 12 },  // 日期
+        { width: 12 },  // 是否高峰日
+        { width: 12 },  // 总需求
+        { width: 10 },  // 售前
+        { width: 10 },  // 售中
+        { width: 10 },  // 售后
+        { width: 12 },  // 售前话务量
+        { width: 12 },  // 售中话务量
+        { width: 12 },  // 售后话务量
+      ];
+
+      // 添加边框
+      dailySheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+      });
+
+      // ========== 导出文件 ==========
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
@@ -193,7 +297,7 @@ export const BudgetPage = () => {
       link.download = `人力测算报告_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
-      Message.success('报表导出成功！');
+      Message.success('报表导出成功！包含2个工作表：测算汇总、每日明细');
     } catch (err: any) {
       Message.error('导出失败: ' + err.message);
     }
@@ -204,6 +308,9 @@ export const BudgetPage = () => {
     setResult(null);
     form.resetFields();
     loadData();
+    // 清除localStorage中的数据
+    localStorage.removeItem('budgetFormData');
+    localStorage.removeItem('budgetCurrentStep');
   };
 
   const stepProps = { formData, updateFormData, form, schemes, promotions, shifts, historyProjects };
@@ -212,8 +319,8 @@ export const BudgetPage = () => {
     <div className='page-container' style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ paddingBottom: 16 }}>
         <PageHeader
-          title='智能测算'
-          subtitle='分步引导式目标参数录入，一键生成智能排班需求计划'
+          title='人力精算建模'
+          subtitle='基于业务驱动的多维度人力需求精算，一键生成标准化人力配置方案'
           icon='⚡'
         />
       </div>
@@ -260,22 +367,28 @@ export const BudgetPage = () => {
 
             {/* 底部操作按钮 */}
             {currentStep < 4 && (
-              <div style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid var(--color-border-2)', display: 'flex', gap: 16 }}>
-                {currentStep > 0 && (
-                  <button onClick={prevStep} style={{
-                    padding: '0 24px', height: 40, borderRadius: 8,
-                    border: '1px solid var(--color-border-3)', background: 'transparent',
-                    cursor: 'pointer', fontWeight: 500, color: 'var(--color-text-2)'
-                  }}>上一步</button>
-                )}
-                <button onClick={nextStep} disabled={loading} style={{
-                  padding: '0 32px', height: 40, borderRadius: 8,
-                  border: 'none', background: 'linear-gradient(135deg, #165DFF 0%, #4080FF 100%)',
-                  cursor: 'pointer', fontWeight: 500, color: '#fff',
-                  display: 'flex', alignItems: 'center', gap: 8
-                }}>
-                  {loading ? '测算中...' : currentStep === 3 ? '开始智能测算' : '下一步'}
-                </button>
+              <div style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid var(--color-border-2)' }}>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                  {currentStep > 0 && (
+                    <button onClick={prevStep} style={{
+                      padding: '0 24px', height: 40, borderRadius: 8,
+                      border: '1px solid var(--color-border-3)', background: 'transparent',
+                      cursor: 'pointer', fontWeight: 500, color: 'var(--color-text-2)'
+                    }}>上一步</button>
+                  )}
+                  <button onClick={nextStep} disabled={loading} style={{
+                    padding: '0 32px', height: 40, borderRadius: 8,
+                    border: 'none', background: 'linear-gradient(135deg, #165DFF 0%, #4080FF 100%)',
+                    cursor: 'pointer', fontWeight: 500, color: '#fff',
+                    display: 'flex', alignItems: 'center', gap: 8
+                  }}>
+                    {loading ? '测算中...' : currentStep === 3 ? '开始智能测算' : '下一步'}
+                  </button>
+                  <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00b42a' }}></span>
+                    数据已自动保存
+                  </div>
+                </div>
               </div>
             )}
           </div>

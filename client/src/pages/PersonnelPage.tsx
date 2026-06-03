@@ -245,8 +245,8 @@ export const PersonnelPage = () => {
   return (
     <div className='page-container' style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <PageHeader
-        title='人员管理'
-        subtitle='维护客服人员档案，关联组织架构，为排班提供数据基础'
+        title='人力资源管理'
+        subtitle='全量员工档案管理，关联组织架构，为智能排班调度提供人力资源支撑'
         icon='👥'
         extra={
           <Space size="medium">

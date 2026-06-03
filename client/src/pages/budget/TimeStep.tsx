@@ -40,9 +40,9 @@ export const TimeStep = ({ formData, updateFormData, form, promotions }: StepPro
         />
       </Form.Item>
 
-      <Form.Item label='2. 活动规划（可选）' field='promotionId'>
+      <Form.Item label='2. 营销计划关联（可选）' field='promotionId'>
         <Select
-          placeholder='选择大促活动（如双11），无活动请留空'
+          placeholder='关联营销活动以应用业务影响系数'
           value={formData.promotionId || undefined}
           onChange={(v) => updateFormData('promotionId', v)}
           allowClear

@@ -170,8 +170,8 @@ export const ShiftPage = () => {
     <div className='page-container' style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
       {/* 页面头部 */}
       <PageHeader
-        title='班次定义'
-        subtitle='设计灵活的工作班次，适配多样化排班需求'
+        title='班次方案配置'
+        subtitle='标准化班次方案定义，配置工作时段与时长，为排班调度提供基准'
         icon='⏰'
         extra={
           <Space size={12}>

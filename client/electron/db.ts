@@ -239,6 +239,33 @@ export class DBManager {
     if (promoCount.count === 0) {
       this._seedPromotions();
     }
+
+    // 插入默认参数方案（检查并修复）
+    const schemeCount = this._db.prepare('SELECT COUNT(*) as count FROM parameter_schemes').get() as { count: number };
+    if (schemeCount.count === 0) {
+      // 完全没有方案，创建新的
+      this._seedParameterSchemes();
+    } else {
+      // 已有方案，检查是否有空参数的方案并修复
+      const schemes = this._db.prepare('SELECT id, params_json FROM parameter_schemes').all() as any[];
+      for (const scheme of schemes) {
+        try {
+          const params = JSON.parse(scheme.params_json);
+          // 检查是否为空对象或没有关键参数
+          const hasParams = params && Object.keys(params).length > 1; // >1 是因为可能只有 _config
+          if (!hasParams) {
+            console.log(`🔧 修复空参数方案 ID: ${scheme.id}`);
+            // 更新为默认参数
+            this._db.prepare('UPDATE parameter_schemes SET params_json = ? WHERE id = ?')
+              .run(JSON.stringify(this._getDefaultParams()), scheme.id);
+          }
+        } catch (e) {
+          console.log(`⚠️  方案 ${scheme.id} 参数格式错误，修复中...`);
+          this._db.prepare('UPDATE parameter_schemes SET params_json = ? WHERE id = ?')
+            .run(JSON.stringify(this._getDefaultParams()), scheme.id);
+        }
+      }
+    }
   }
 
   private _seedData() {
@@ -256,6 +283,163 @@ export class DBManager {
     insert.run('A级活动(会员日)', 1.9, '常规平台级活动');
     insert.run('B级活动(品类日)', 1.5, '品类促销活动');
     insert.run('日常运营', 1.0, '无活动的日常流量');
+  }
+
+  private _getDefaultParams() {
+    // 默认参数配置（完整的参数结构）
+    return {
+      // 基础业务参数
+      avg_order_value: 160,
+      daily_visitors: 3800,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      
+      // 转化漏斗
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      payment_to_aftersale: 0.15,
+      midsale_ratio: 0.35,
+      
+      // 岗位效能
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72,
+      
+      // 并发处理能力
+      max_concurrent_sessions: 3,
+      concurrent_efficiency_loss: 0.15,
+      
+      // 员工能力分布
+      novice_ratio: 0.2,
+      novice_efficiency: 0.6,
+      expert_ratio: 0.15,
+      expert_efficiency: 1.4,
+      
+      // 工作状态
+      actual_availability_rate: 0.85,
+      response_rate: 0.92,
+      
+      // 业务复杂度
+      simple_problem_ratio: 0.5,
+      simple_time_factor: 0.6,
+      complex_problem_ratio: 0.15,
+      complex_time_factor: 2.0,
+      
+      // 阶段时间偏移
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+
+      // 参数分类配置
+      _config: [
+        {
+          title: '基础业务参数',
+          icon: '💼',
+          color: '#3b82f6',
+          params: [
+            { key: 'avg_order_value', label: '平均客单价', min: 1, max: 100000, step: 10, unit: '元', default: 160 },
+            { key: 'daily_visitors', label: '日均访客数', min: 100, max: 100000, step: 100, unit: '人', default: 3800 },
+            { key: 'peak_factor', label: '高峰系数', min: 1.0, max: 2.0, step: 0.1, unit: '', default: 1.2 },
+            { key: 'safety_buffer', label: '安全冗余', min: 1.0, max: 2.0, step: 0.05, unit: '', default: 1.15 }
+          ]
+        },
+        {
+          title: '转化漏斗',
+          icon: '🎯',
+          color: '#8b5cf6',
+          params: [
+            { key: 'visitor_to_presale', label: '访客→咨询率', min: 0, max: 1, step: 0.01, unit: '%', default: 0.25 },
+            { key: 'consult_to_order', label: '咨询→下单率', min: 0, max: 1, step: 0.01, unit: '%', default: 0.6 },
+            { key: 'order_to_payment', label: '下单→付款率', min: 0, max: 1, step: 0.01, unit: '%', default: 0.9 },
+            { key: 'payment_to_aftersale', label: '付款→售后率', min: 0, max: 1, step: 0.01, unit: '%', default: 0.15 },
+            { key: 'midsale_ratio', label: '售中占比', min: 0, max: 1, step: 0.01, unit: '%', default: 0.35 }
+          ]
+        },
+        {
+          title: '岗位效能',
+          icon: '⚡',
+          color: '#10b981',
+          params: [
+            { key: 'presale_handle_time', label: '售前处理时长', min: 1, max: 15, step: 0.5, unit: '分钟', default: 4.5 },
+            { key: 'presale_saturation', label: '售前饱和度', min: 0.5, max: 1, step: 0.01, unit: '%', default: 0.78, description: '客服实际工作时间占排班时间的比例，50%~100%' },
+            { key: 'midsale_handle_time', label: '售中处理时长', min: 1, max: 15, step: 0.5, unit: '分钟', default: 3.0 },
+            { key: 'midsale_saturation', label: '售中饱和度', min: 0.5, max: 1, step: 0.01, unit: '%', default: 0.82, description: '客服实际工作时间占排班时间的比例，50%~100%' },
+            { key: 'aftersale_handle_time', label: '售后处理时长', min: 1, max: 15, step: 0.5, unit: '分钟', default: 6.5 },
+            { key: 'aftersale_saturation', label: '售后饱和度', min: 0.5, max: 1, step: 0.01, unit: '%', default: 0.72, description: '客服实际工作时间占排班时间的比例，50%~100%' }
+          ]
+        },
+        {
+          title: '并发处理能力',
+          icon: '🔄',
+          color: '#f59e0b',
+          params: [
+            { key: 'max_concurrent_sessions', label: '单人最大并发数', min: 1, max: 8, step: 1, unit: '个', default: 3, description: '客服同时处理的会话数。在线客服通常2-4个，电话客服为1个' },
+            { key: 'concurrent_efficiency_loss', label: '并发效率衰减', min: 0, max: 0.5, step: 0.05, unit: '%', default: 0.15, description: '并发数增加时的效率损失。如并发3个时效率为85%' }
+          ]
+        },
+        {
+          title: '员工能力分布',
+          icon: '👥',
+          color: '#8b5cf6',
+          params: [
+            { key: 'novice_ratio', label: '新手员工占比', min: 0, max: 0.6, step: 0.05, unit: '%', default: 0.2, description: '入职3个月内的新员工比例' },
+            { key: 'novice_efficiency', label: '新手效率系数', min: 0.4, max: 1.0, step: 0.05, unit: '', default: 0.6, description: '新手处理速度是标准的60%' },
+            { key: 'expert_ratio', label: '专家员工占比', min: 0, max: 0.4, step: 0.05, unit: '%', default: 0.15, description: '工作1年以上的资深员工比例' },
+            { key: 'expert_efficiency', label: '专家效率系数', min: 1.0, max: 2.0, step: 0.1, unit: '', default: 1.4, description: '专家处理速度是标准的1.4倍' }
+          ]
+        },
+        {
+          title: '工作状态',
+          icon: '📊',
+          color: '#06b6d4',
+          params: [
+            { key: 'actual_availability_rate', label: '实际在岗率', min: 0.6, max: 0.95, step: 0.05, unit: '%', default: 0.85, description: '扣除休息、培训、会议后的实际工作时间占比' },
+            { key: 'response_rate', label: '即时响应率', min: 0.7, max: 1.0, step: 0.05, unit: '%', default: 0.92, description: '有咨询时能立即响应的概率' }
+          ]
+        },
+        {
+          title: '业务复杂度',
+          icon: '🎯',
+          color: '#ec4899',
+          params: [
+            { key: 'simple_problem_ratio', label: '简单问题占比', min: 0.2, max: 0.8, step: 0.05, unit: '%', default: 0.5, description: '物流查询、尺码咨询等简单问题的比例' },
+            { key: 'simple_time_factor', label: '简单问题时长系数', min: 0.3, max: 0.8, step: 0.05, unit: '', default: 0.6, description: '简单问题处理时长是标准的60%' },
+            { key: 'complex_problem_ratio', label: '复杂问题占比', min: 0.05, max: 0.3, step: 0.05, unit: '%', default: 0.15, description: '投诉、疑难问题等复杂问题的比例' },
+            { key: 'complex_time_factor', label: '复杂问题时长系数', min: 1.5, max: 3.0, step: 0.1, unit: '', default: 2.0, description: '复杂问题处理时长是标准的2倍' }
+          ]
+        },
+        {
+          title: '阶段时间偏移',
+          icon: '⏰',
+          color: '#6366f1',
+          params: [
+            { key: 'presale_time_offset', label: '售前提前天数', min: 0, max: 15, step: 1, unit: '天', default: 2, description: '售前咖询高峰早于活动日的天数，0 表示当天' },
+            { key: 'midsale_time_offset', label: '售中延迟天数', min: 0, max: 5, step: 1, unit: '天', default: 0, description: '售中流量相对活动日的延迟，0 表示当天' },
+            { key: 'aftersale_time_offset', label: '售后延迟天数', min: 0, max: 15, step: 1, unit: '天', default: 3, description: '售后咨询高峰晚于活动日的天数' }
+          ]
+        }
+      ]
+    };
+  }
+
+  private _seedParameterSchemes() {
+    // 插入默认参数方案
+    const insert = this._db.prepare(
+      'INSERT INTO parameter_schemes (scheme_name, params_json, is_default, description) VALUES (?, ?, ?, ?)'
+    );
+    
+    insert.run(
+      '标准参数方案',
+      JSON.stringify(this._getDefaultParams()),
+      1,
+      '系统预设的标准参数配置，适用于大多数电商客服场景'
+    );
+
+    console.log('✅ 默认参数方案已创建');
   }
 
   public query(sql: string, params: any[] = []) {

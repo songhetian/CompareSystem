@@ -12,9 +12,9 @@ export const TargetStep = ({ formData, updateFormData, form, schemes }: StepProp
       style={{ width: '100%' }}
       requiredSymbol={{ position: 'end' }}
     >
-      <Form.Item label='1. 选择测算参数方案' field='schemeId' required rules={[{ required: true, message: '请选择参数方案' }]}>
+      <Form.Item label='1. 选择精算参数方案' field='schemeId' required rules={[{ required: true, message: '请选择精算参数方案' }]}>
         <Select
-          placeholder='选择参数方案'
+          placeholder='选择精算参数方案'
           value={formData.schemeId || undefined}
           onChange={(v) => updateFormData('schemeId', v)}
           style={{ width: '100%', maxWidth: 500 }}
