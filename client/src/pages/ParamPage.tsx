@@ -1,0 +1,917 @@
+import {
+  Typography, Card, Space, Message, Modal, Form, Input, Button,
+  Slider, InputNumber, Tag, Tooltip, Drawer, Collapse, Grid, Radio, Select
+} from '@arco-design/web-react';
+import { useState, useEffect } from 'react';
+import {
+  IconPlus, IconDelete, IconRefresh, IconStar, IconStarFill, IconSave,
+  IconEdit, IconSettings
+} from '@arco-design/web-react/icon';
+import { InlineLoading } from '../components/LoadingScreen';
+import { PageHeader } from '../components/common';
+
+const { Title, Text } = Typography;
+const { Row, Col } = Grid;
+const CollapseItem = Collapse.Item;
+
+// ─────────────────────────────────────────────
+// 工具：根据 step 计算小数精度
+// ─────────────────────────────────────────────
+const getPrecision = (step: number): number => {
+  if (!step || step >= 1) return 0;
+  const s = step.toString();
+  return s.includes('.') ? s.split('.')[1].length : 0;
+};
+
+// ─────────────────────────────────────────────
+// 单个参数行
+// ─────────────────────────────────────────────
+const ParamRow = ({
+  param,
+  value,
+  onChange,
+  onEdit,
+  onDelete,
+  accentColor,
+  isLast,
+}: any) => {
+  const isPercentage = param.unit === '%';
+
+  const uiValue   = isPercentage ? +(value * 100).toFixed(4)      : value;
+  const uiMin     = isPercentage ? +(param.min  * 100).toFixed(4) : param.min;
+  const uiMax     = isPercentage ? +(param.max  * 100).toFixed(4) : param.max;
+  const uiStep    = isPercentage ? +(param.step * 100).toFixed(4) : param.step;
+  const precision = getPrecision(uiStep);
+
+  const handleChange = (v: number | number[] | null) => {
+    if (v === null || v === undefined) return;
+    const num = Array.isArray(v) ? v[0] : v;
+    onChange(param.key, isPercentage ? +(num / 100).toFixed(6) : num);
+  };
+
+  const formatDisplay = (v: any) => {
+    if (v === undefined || v === null || v === '') return '';
+    if (isPercentage) return `${Number(v).toFixed(precision)}%`;
+    if (param.unit) return `${Number(v).toFixed(precision)}${param.unit}`;
+    return `${Number(v).toFixed(precision)}`;
+  };
+
+  const parseDisplay = (v: any) => {
+    if (!v) return '';
+    return String(v).replace('%', '').replace(param.unit || '', '');
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '7px 4px',
+          borderRadius: 6,
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLDivElement).style.background = `${accentColor}0e`;
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLDivElement).style.background = 'transparent';
+        }}
+      >
+        {/* 标签：固定宽度 */}
+        <Tooltip content={param.description || ''} mini disabled={!param.description}>
+          <Text
+            style={{
+              width: 88,
+              flexShrink: 0,
+              fontSize: 12,
+              fontWeight: 500,
+              color: 'var(--color-text-1)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              cursor: param.description ? 'help' : 'default',
+            }}
+          >
+            {param.label}
+          </Text>
+        </Tooltip>
+
+        {/* 滑块 */}
+        <Slider
+          value={uiValue}
+          min={uiMin}
+          max={uiMax}
+          step={uiStep}
+          onChange={handleChange}
+          style={{ flex: 1, marginBottom: 0 }}
+        />
+
+        {/* 数字输入框（含单位格式化）*/}
+        <InputNumber
+          size="small"
+          value={uiValue}
+          min={uiMin}
+          max={uiMax}
+          step={uiStep}
+          precision={precision}
+          onChange={handleChange}
+          formatter={formatDisplay}
+          parser={parseDisplay}
+          style={{ width: 96, flexShrink: 0 }}
+        />
+
+        {/* 操作按钮 - 始终可见，低调灰色 */}
+        <Tooltip content="编辑参数定义" mini>
+          <Button
+            size="mini"
+            type="text"
+            icon={<IconEdit />}
+            onClick={() => onEdit(param)}
+            style={{ color: 'var(--color-text-4)', flexShrink: 0, padding: '0 4px' }}
+          />
+        </Tooltip>
+        <Tooltip content="删除参数" mini>
+          <Button
+            size="mini"
+            type="text"
+            status="danger"
+            icon={<IconDelete />}
+            onClick={() => onDelete(param.key)}
+            style={{ flexShrink: 0, padding: '0 4px' }}
+          />
+        </Tooltip>
+      </div>
+      {!isLast && (
+        <div style={{ height: 1, background: 'var(--color-border-1)', margin: '0 4px' }} />
+      )}
+    </>
+  );
+};
+
+// ─────────────────────────────────────────────
+// 参数分类面板内容
+// ─────────────────────────────────────────────
+const CategoryContent = ({
+  category,
+  values,
+  onChange,
+  onEditParam,
+  onDeleteParam,
+}: any) => (
+  <div>
+    {category.params.length === 0 && (
+      <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--color-text-3)', fontSize: 12 }}>
+        暂无参数
+      </div>
+    )}
+    {category.params.map((param: any, idx: number) => (
+      <ParamRow
+        key={param.key}
+        param={param}
+        value={values[param.key] ?? param.default ?? 0}
+        onChange={onChange}
+        onEdit={onEditParam}
+        onDelete={onDeleteParam}
+        accentColor={category.color}
+        isLast={idx === category.params.length - 1}
+      />
+    ))}
+  </div>
+);
+
+// ─────────────────────────────────────────────
+// 主页面
+// ─────────────────────────────────────────────
+export const ParamPage = () => {
+  const [schemes, setSchemes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentScheme, setCurrentScheme] = useState<any>(null);
+  const [paramValues, setParamValues] = useState<any>({});
+  const [paramCategories, setParamCategories] = useState<any[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editSchemeModalVisible, setEditSchemeModalVisible] = useState(false);
+  const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
+
+  // 参数编辑 Drawer
+  const [editDrawerVisible, setEditDrawerVisible] = useState(false);
+  const [paramForm] = Form.useForm();
+  const [editingParam, setEditingParam] = useState<any>(null);
+  const [targetCategory, setTargetCategory] = useState<string>('');
+
+  // 默认参数配置
+  const defaultCategories = [
+    {
+      title: '基础业务参数', icon: '💼', color: '#3b82f6',
+      params: [
+        { key: 'avg_order_value',  label: '平均客单价',  min: 1,  max: 100000,  step: 10,   unit: '元',  default: 160 },
+        { key: 'daily_visitors',   label: '日均访客数',  min: 100, max: 100000, step: 100,  unit: '人',  default: 3800 },
+        { key: 'peak_factor',      label: '高峰系数',    min: 1.0, max: 2.0,   step: 0.1,  unit: '',    default: 1.2 },
+        { key: 'safety_buffer',    label: '安全冗余',    min: 1.0, max: 2.0,   step: 0.05, unit: '',    default: 1.15 },
+      ]
+    },
+    {
+      title: '转化漏斗', icon: '🎯', color: '#8b5cf6',
+      params: [
+        { key: 'visitor_to_presale',    label: '访客→咨询率',  min: 0, max: 1, step: 0.01, unit: '%', default: 0.25 },
+        { key: 'consult_to_order',      label: '咨询→下单率',  min: 0, max: 1, step: 0.01, unit: '%', default: 0.6 },
+        { key: 'order_to_payment',      label: '下单→付款率',  min: 0, max: 1, step: 0.01, unit: '%', default: 0.9 },
+        { key: 'payment_to_aftersale',  label: '付款→售后率',  min: 0, max: 1, step: 0.01, unit: '%', default: 0.15 },
+        { key: 'midsale_ratio',         label: '售中占比',     min: 0, max: 1, step: 0.01, unit: '%', default: 0.35 },
+      ]
+    },
+    {
+      title: '岗位效能', icon: '⚡', color: '#10b981',
+      params: [
+        { key: 'presale_handle_time',   label: '售前处理时长', min: 1,   max: 15,  step: 0.5,  unit: '分钟', default: 4.5 },
+        { key: 'presale_saturation',    label: '售前饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.78, description: '客服实际工作时间占排班时间的比例，50%~100%' },
+        { key: 'midsale_handle_time',   label: '售中处理时长', min: 1,   max: 15,  step: 0.5,  unit: '分钟', default: 3.0 },
+        { key: 'midsale_saturation',    label: '售中饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.82, description: '客服实际工作时间占排班时间的比例，50%~100%' },
+        { key: 'aftersale_handle_time', label: '售后处理时长', min: 1,   max: 15,  step: 0.5,  unit: '分钟', default: 6.5 },
+        { key: 'aftersale_saturation',  label: '售后饱和度',   min: 0.5, max: 1,   step: 0.01, unit: '%',    default: 0.72, description: '客服实际工作时间占排班时间的比例，50%~100%' },
+      ]
+    },
+    {
+      title: '分时爆发', icon: '🔥', color: '#f59e0b',
+      params: [
+        { key: 'presale_burst_start',   label: '售前爆发开始', min: 0, max: 23, step: 1, unit: '点', default: 10,  description: '售前流量爆发段开始时间，如 10 表示 10:00' },
+        { key: 'presale_burst_end',     label: '售前爆发结束', min: 0, max: 23, step: 1, unit: '点', default: 12,  description: '售前流量爆发段结束时间，如 12 表示 12:00' },
+        { key: 'presale_burst_factor',  label: '售前爆发倍数', min: 1, max: 5,  step: 0.1, unit: '倍', default: 1.9, description: '爆发时段内流量是平时的多少倍' },
+        { key: 'midsale_burst_start',   label: '售中爆发开始', min: 0, max: 23, step: 1, unit: '点', default: 15,  description: '售中流量爆发段开始时间' },
+        { key: 'midsale_burst_end',     label: '售中爆发结束', min: 0, max: 23, step: 1, unit: '点', default: 17,  description: '售中流量爆发段结束时间' },
+        { key: 'midsale_burst_factor',  label: '售中爆发倍数', min: 1, max: 5,  step: 0.1, unit: '倍', default: 2.3, description: '爆发时段内流量是平时的多少倍' },
+        { key: 'aftersale_burst_start', label: '售后爆发开始', min: 0, max: 23, step: 1, unit: '点', default: 20,  description: '售后流量爆发段开始时间' },
+        { key: 'aftersale_burst_end',   label: '售后爆发结束', min: 0, max: 23, step: 1, unit: '点', default: 22,  description: '售后流量爆发段结束时间' },
+        { key: 'aftersale_burst_factor',label: '售后爆发倍数', min: 1, max: 5,  step: 0.1, unit: '倍', default: 2.6, description: '爆发时段内流量是平时的多少倍' },
+      ]
+    },
+    {
+      title: '阶段时间偏移', icon: '⏰', color: '#6366f1',
+      params: [
+        { key: 'presale_time_offset',   label: '售前提前天数', min: 0, max: 15, step: 1, unit: '天', default: 2,  description: '售前咖询高峰早于活动日的天数，0 表示当天' },
+        { key: 'midsale_time_offset',   label: '售中延迟天数', min: 0, max: 5,  step: 1, unit: '天', default: 0,  description: '售中流量相对活动日的延迟，0 表示当天' },
+        { key: 'aftersale_time_offset', label: '售后延迟天数', min: 0, max: 15, step: 1, unit: '天', default: 3,  description: '售后咨询高峰晚于活动日的天数' },
+      ]
+    },
+  ];
+
+  useEffect(() => { loadSchemes(); }, []);
+
+  const loadSchemes = async () => {
+    setLoading(true);
+    try {
+      const data = await window.api.getSchemes();
+      setSchemes(data);
+      if (currentScheme) {
+        const updated = data.find((s: any) => s.id === currentScheme.id);
+        if (updated) selectScheme(updated);
+      } else {
+        const def = data.find((s: any) => s.is_default);
+        if (def) selectScheme(def);
+      }
+    } catch {
+      Message.error('加载失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectScheme = (scheme: any) => {
+    setCurrentScheme(scheme);
+    const parsed = JSON.parse(scheme.params_json);
+    if (parsed._config) {
+      setParamCategories(parsed._config);
+      const { _config, ...vals } = parsed;
+      setParamValues(vals);
+    } else {
+      setParamCategories(defaultCategories);
+      setParamValues(parsed);
+    }
+    setHasChanges(false);
+  };
+
+  const updateParam = (key: string, value: number) => {
+    setParamValues((prev: any) => ({ ...prev, [key]: value }));
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    if (!currentScheme) return;
+    try {
+      await window.api.updateScheme({
+        id: currentScheme.id,
+        name: currentScheme.scheme_name,
+        params: { ...paramValues, _config: paramCategories },
+        desc: currentScheme.description,
+      });
+      Message.success('保存成功');
+      setHasChanges(false);
+      loadSchemes();
+    } catch {
+      Message.error('保存失败');
+    }
+  };
+
+  const handleEditScheme = (scheme: any) => {
+    setCurrentScheme(scheme);
+    editForm.setFieldsValue({
+      name: scheme.scheme_name,
+      description: scheme.description,
+    });
+    setEditSchemeModalVisible(true);
+  };
+
+  const handleUpdateSchemeInfo = async (values: any) => {
+    if (!currentScheme) return;
+    try {
+      await window.api.updateScheme({
+        id: currentScheme.id,
+        name: values.name,
+        params: JSON.parse(currentScheme.params_json),
+        desc: values.description || '',
+      });
+      Message.success('更新成功');
+      setEditSchemeModalVisible(false);
+      loadSchemes();
+    } catch {
+      Message.error('更新失败');
+    }
+  };
+
+  const handleCreate = async (values: any) => {
+    try {
+      await window.api.addScheme({
+        name: values.name,
+        params: { ...paramValues, _config: paramCategories },
+        desc: values.description || '',
+      });
+      Message.success('创建成功');
+      setCreateModalVisible(false);
+      form.resetFields();
+      loadSchemes();
+    } catch {
+      Message.error('创建失败');
+    }
+  };
+
+  const handleEditParam = (param: any, categoryTitle?: string) => {
+    setEditingParam(param);
+    if (param) {
+      // 编辑已有参数：如果是百分比，min/max/step/default 转为百分比显示
+      const isPercentage = param.unit === '%';
+      paramForm.setFieldsValue({
+        ...param,
+        min:     isPercentage ? +(param.min  * 100).toFixed(4) : param.min,
+        max:     isPercentage ? +(param.max  * 100).toFixed(4) : param.max,
+        step:    isPercentage ? +(param.step * 100).toFixed(4) : param.step,
+        default: isPercentage ? +(param.default * 100).toFixed(4) : param.default,
+        isPercentage,
+      });
+    } else {
+      paramForm.resetFields();
+      setTargetCategory(categoryTitle || '');
+    }
+    setEditDrawerVisible(true);
+  };
+
+  const handleDeleteParam = (key: string) => {
+    Modal.confirm({
+      title: '确认删除参数',
+      content: '删除后该参数将不再显示在配置中，已存储的数值不受影响。',
+      onOk: () => {
+        setParamCategories(cats =>
+          cats.map(cat => ({ ...cat, params: cat.params.filter((p: any) => p.key !== key) }))
+        );
+        setHasChanges(true);
+      },
+    });
+  };
+
+  const handleSaveParam = (values: any) => {
+    const isPercentage = values.unit === '%';
+    // 如果用户以百分比形式填写了 min/max/step/default，转回 0-1 存储
+    const finalParam = {
+      ...values,
+      min:     isPercentage ? +(values.min     / 100) : values.min,
+      max:     isPercentage ? +(values.max     / 100) : values.max,
+      step:    isPercentage ? +(values.step    / 100) : values.step,
+      default: isPercentage ? +(values.default / 100) : values.default,
+    };
+    // 清除辅助字段
+    delete finalParam.isPercentage;
+
+    const newCategories = paramCategories.map(cat => ({ ...cat, params: [...cat.params] }));
+
+    if (editingParam) {
+      newCategories.forEach(cat => {
+        const idx = cat.params.findIndex((p: any) => p.key === editingParam.key);
+        if (idx !== -1) cat.params[idx] = { ...cat.params[idx], ...finalParam };
+      });
+    } else {
+      const catIdx = newCategories.findIndex(cat => cat.title === targetCategory);
+      if (catIdx !== -1) {
+        newCategories[catIdx].params.push({ ...finalParam });
+        setParamValues((prev: any) => ({ ...prev, [finalParam.key]: finalParam.default ?? 0 }));
+      }
+    }
+
+    setParamCategories(newCategories);
+    setEditDrawerVisible(false);
+    paramForm.resetFields();
+    setHasChanges(true);
+  };
+
+  const handleSetDefault = async (id: number) => {
+    try {
+      await window.api.setDefaultScheme(id);
+      Message.success('已设为默认');
+      loadSchemes();
+    } catch {
+      Message.error('设置失败');
+    }
+  };
+
+  const handleDelete = (scheme: any) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定删除方案「${scheme.scheme_name}」吗？`,
+      onOk: async () => {
+        try {
+          await window.api.deleteScheme(scheme.id);
+          Message.success('删除成功');
+          if (currentScheme?.id === scheme.id) setCurrentScheme(null);
+          loadSchemes();
+        } catch {
+          Message.error('删除失败');
+        }
+      },
+    });
+  };
+
+  if (loading) return <InlineLoading tip="加载中..." />;
+
+  // Collapse 默认全部展开
+  const defaultActiveKeys = paramCategories.map((_: any, i: number) => String(i));
+
+  return (
+    <div className="page-container" style={{ display: 'flex', height: '100%' }}>
+
+      {/* ── 左侧：方案列表 ── */}
+      <div
+        style={{
+          width: 296,
+          background: 'var(--color-bg-2)',
+          borderRight: '1px solid var(--color-border-2)',
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+        }}
+      >
+        {/* 顶部标题栏 */}
+        <div
+          style={{
+            padding: '18px 16px 14px',
+            borderBottom: '1px solid var(--color-border-2)',
+            background: 'var(--color-bg-2)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <IconSettings style={{ fontSize: 18, color: 'var(--color-text-1)' }} />
+            <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-1)' }}>参数方案</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-3)' }}>选择方案以编辑参数配置</div>
+          {/* 当前选中提示 */}
+          {currentScheme && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                background: 'var(--color-fill-2)',
+                borderRadius: 6,
+                border: '1px solid var(--color-border-1)',
+              }}
+            >
+              <div style={{ fontSize: 11, color: 'var(--color-text-3)', marginBottom: 4 }}>当前编辑方案：</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-1)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {!!currentScheme.is_default && <IconStarFill style={{ fontSize: 12, color: '#f59e0b' }} />}
+                {currentScheme.scheme_name}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 方案列表 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px 4px' }}>
+          <Space direction="vertical" style={{ width: '100%' }} size={6}>
+            {schemes.map(scheme => {
+              const isActive = currentScheme?.id === scheme.id;
+              const isDefault = !!scheme.is_default;
+              return (
+                <div
+                  key={scheme.id}
+                  onClick={() => selectScheme(scheme)}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    border: isActive ? '1px solid var(--color-primary-6)' : '1px solid var(--color-border-2)',
+                    background: isActive
+                      ? '#d4e8ff'
+                      : 'var(--color-bg-1)',
+                    transition: 'all 0.2s',
+                    boxShadow: isActive ? '0 2px 8px rgba(22,93,255,0.1)' : 'none',
+                    position: 'relative',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        {isDefault && (
+                          <IconStarFill style={{ fontSize: 12, color: '#f59e0b', flexShrink: 0 }} />
+                        )}
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: isActive ? 600 : 500,
+                            color: isActive ? 'var(--color-primary-6)' : 'var(--color-text-1)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {scheme.scheme_name}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: isActive ? '#4080FF' : 'var(--color-text-3)',
+                          lineHeight: '1.4',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {scheme.description || '暂无描述'}
+                      </div>
+                    </div>
+                    {/* 选中勾 */}
+                    {isActive && (
+                      <div
+                        style={{
+                          width: 20, height: 20,
+                          borderRadius: '50%',
+                          background: '#165DFF',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0, marginLeft: 6,
+                        }}
+                      >
+                        <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 选中时的操作按钮 */}
+                  {isActive && (
+                    <div style={{ marginTop: 10, display: 'flex', gap: 6, borderTop: '1px solid var(--color-border-2)', paddingTop: 8 }}>
+                      <Button
+                        size="mini" type="text"
+                        icon={<IconEdit />}
+                        onClick={e => { e.stopPropagation(); handleEditScheme(scheme); }}
+                        style={{ fontSize: 12, height: 24, padding: '0 6px', color: 'var(--color-primary-6)' }}
+                      >
+                        修改
+                      </Button>
+                      {!isDefault && (
+                        <Button
+                          size="mini" type="text"
+                          icon={<IconStar />}
+                          onClick={e => { e.stopPropagation(); handleSetDefault(scheme.id); }}
+                          style={{ fontSize: 12, height: 24, padding: '0 6px', color: '#f59e0b' }}
+                        >
+                          设为默认
+                        </Button>
+                      )}
+                      {!isDefault && (
+                        <Button
+                          size="mini" type="text" status="danger"
+                          icon={<IconDelete />}
+                          onClick={e => { e.stopPropagation(); handleDelete(scheme); }}
+                          style={{ fontSize: 12, height: 24, padding: '0 6px' }}
+                        >
+                          删除
+                        </Button>
+                      )}
+                      {isDefault && (
+                        <span style={{ fontSize: 12, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+                          <IconStarFill style={{ fontSize: 12 }} /> 默认方案
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </Space>
+        </div>
+
+        {/* 新建按钮 */}
+        <div style={{ padding: '16px', borderTop: '1px solid var(--color-border-2)', background: 'var(--color-bg-2)' }}>
+          <Button
+            type="primary" long icon={<IconPlus />}
+            onClick={() => setCreateModalVisible(true)}
+            style={{ borderRadius: 6 }}
+          >
+            新建方案
+          </Button>
+        </div>
+      </div>
+
+      {/* ── 右侧：参数配置 ── */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          background: 'var(--color-bg-3)',
+        }}
+      >
+        {currentScheme ? (
+          <>
+            {/* 顶部工具栏 */}
+            <PageHeader
+              title={currentScheme.scheme_name}
+              subtitle={currentScheme.description || '编辑参数配置'}
+              extra={
+                <Space size="medium">
+                  {hasChanges && (
+                    <Tag color="orange" style={{ borderRadius: 6 }}>
+                      未保存
+                    </Tag>
+                  )}
+                  <Button
+                    icon={<IconRefresh />}
+                    onClick={() => selectScheme(currentScheme)}
+                    disabled={!hasChanges}
+                    style={{ borderRadius: 8 }}
+                  >
+                    重置
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<IconSave />}
+                    onClick={handleSave}
+                    disabled={!hasChanges}
+                    style={{ borderRadius: 8 }}
+                  >
+                    保存修改
+                  </Button>
+                </Space>
+              }
+            />
+
+            {/* 参数分类 Collapse */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+              <Collapse
+                defaultActiveKey={defaultActiveKeys}
+                bordered={false}
+                style={{ background: 'transparent' }}
+              >
+                {paramCategories.map((category: any, index: number) => (
+                  <CollapseItem
+                    key={String(index)}
+                    name={String(index)}
+                    header={
+                      <Space size={8}>
+                        <span style={{ fontSize: 14 }}>{category.icon}</span>
+                        <Text bold style={{ fontSize: 13 }}>{category.title}</Text>
+                        <Tag
+                          size="small"
+                          style={{
+                            borderRadius: 10,
+                            fontSize: 10,
+                            padding: '0 6px',
+                            background: `${category.color}18`,
+                            color: category.color,
+                            border: `1px solid ${category.color}44`,
+                          }}
+                        >
+                          {category.params.length} 项
+                        </Tag>
+                      </Space>
+                    }
+                    style={{
+                      marginBottom: 8,
+                      background: 'var(--color-bg-2)',
+                      borderRadius: 10,
+                      border: 'none',
+                      borderLeft: `3px solid ${category.color}`,
+                      overflow: 'hidden',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                    }}
+                  >
+                    <CategoryContent
+                      category={category}
+                      values={paramValues}
+                      onChange={updateParam}
+                      onEditParam={handleEditParam}
+                      onDeleteParam={handleDeleteParam}
+                    />
+                  </CollapseItem>
+                ))}
+              </Collapse>
+
+              {/* 提示区 */}
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: '12px 16px',
+                  background: 'var(--color-primary-1)',
+                  border: '1px solid var(--color-primary-3)',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: 'var(--color-text-2)',
+                  lineHeight: '1.8',
+                }}
+              >
+                <strong>💡 使用提示：</strong><br />
+                · 百分比参数（如饱和度、转化率）以 <strong>%</strong> 显示，存储时自动转换为小数<br />
+                · 拖动滑块或直接在输入框填写数值均可<br />
+                · 鼠标悬停参数行可见 <strong>编辑 / 删除</strong> 按钮，可修改标签、单位、范围等<br />
+                · 修改后点右上角 <strong>保存修改</strong>，配置随方案持久化<br />
+                <br />
+                <strong>📌 参数说明：</strong><br />
+                · <strong>阶段时间偏移</strong>：控制每个岗位的流量峰值出现在活动日前/后几天（天级别）<br />
+                &nbsp;&nbsp;例：售前提前2天 = 活动开始前第2天咨询量最高<br />
+                · <strong>分时爆发</strong>：控制一天内哪个时间段流量暴增（小时级别），与时间偏移独立，不冲突<br />
+                &nbsp;&nbsp;例：售前在 10:00–12:00 爆发1.9倍，指当天10-12点的话务量是其他时段的1.9倍
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="empty-state">
+            <div style={{ fontSize: 56, marginBottom: 16 }}>📊</div>
+            <Title heading={4}>请选择一个方案</Title>
+            <Text type="secondary">从左侧列表选择，或点击「新建方案」创建</Text>
+          </div>
+        )}
+      </div>
+
+      {/* ── 创建方案 Modal ── */}
+      <Modal
+        title={<><IconPlus /> &nbsp;创建新方案</>}
+        visible={createModalVisible}
+        onCancel={() => { setCreateModalVisible(false); form.resetFields(); }}
+        footer={null}
+        style={{ borderRadius: 16 }}
+      >
+        <Form form={form} layout="vertical" onSubmit={handleCreate}>
+          <Form.Item
+            label="方案名称" field="name"
+            rules={[{ required: true, message: '请输入方案名称' }]}
+          >
+            <Input placeholder="如：双11大促方案" size="large" />
+          </Form.Item>
+          <Form.Item label="描述" field="description">
+            <Input.TextArea placeholder="描述方案的用途和特点（可选）" rows={3} />
+          </Form.Item>
+          <div
+            style={{
+              padding: '10px 14px',
+              background: 'var(--color-primary-1)',
+              border: '1px solid var(--color-primary-3)',
+              borderRadius: 8,
+              marginBottom: 16,
+              fontSize: 12,
+              color: 'var(--color-text-2)',
+            }}
+          >
+            💡 新方案将复制当前选中方案的全部参数，创建后可自由调整
+          </div>
+          <Form.Item>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={() => { setCreateModalVisible(false); form.resetFields(); }}>取消</Button>
+              <Button type="primary" htmlType="submit">确认创建</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* ── 修改方案 Modal ── */}
+      <Modal
+        title={<><IconEdit /> &nbsp;修改方案信息</>}
+        visible={editSchemeModalVisible}
+        onCancel={() => { setEditSchemeModalVisible(false); editForm.resetFields(); }}
+        footer={null}
+        style={{ borderRadius: 16 }}
+      >
+        <Form form={editForm} layout="vertical" onSubmit={handleUpdateSchemeInfo}>
+          <Form.Item
+            label="方案名称" field="name"
+            rules={[{ required: true, message: '请输入方案名称' }]}
+          >
+            <Input placeholder="请输入方案名称" size="large" />
+          </Form.Item>
+          <Form.Item label="描述" field="description">
+            <Input.TextArea placeholder="描述方案的用途和特点（可选）" rows={3} />
+          </Form.Item>
+          <Form.Item>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={() => { setEditSchemeModalVisible(false); editForm.resetFields(); }}>取消</Button>
+              <Button type="primary" htmlType="submit">保存修改</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* ── 参数编辑 Drawer ── */}
+      <Drawer
+        width={380}
+        title={editingParam ? `编辑参数：${editingParam.label}` : `添加参数 → ${targetCategory}`}
+        visible={editDrawerVisible}
+        onCancel={() => { setEditDrawerVisible(false); paramForm.resetFields(); }}
+        footer={
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => { setEditDrawerVisible(false); paramForm.resetFields(); }}>取消</Button>
+              <Button type="primary" onClick={() => paramForm.submit()}>
+                {editingParam ? '保存修改' : '添加参数'}
+              </Button>
+            </Space>
+          </div>
+        }
+      >
+        <Form form={paramForm} layout="vertical" onSubmit={handleSaveParam}>
+          <Form.Item
+            label="参数标识（Key）" field="key"
+            rules={[{ required: true, message: '请输入唯一标识' }]}
+            extra="英文和下划线，全局唯一，如 my_param"
+          >
+            <Input disabled={!!editingParam} placeholder="my_param" />
+          </Form.Item>
+
+          <Form.Item
+            label="显示名称" field="label"
+            rules={[{ required: true, message: '请输入显示名称' }]}
+          >
+            <Input placeholder="如：响应速度" />
+          </Form.Item>
+
+          <Form.Item label="单位" field="unit">
+            <Input placeholder="如：%  元  分钟  倍  天（留空则无单位）" />
+          </Form.Item>
+
+          <div
+            style={{
+              padding: '10px 14px',
+              background: 'var(--color-warning-1)',
+              border: '1px solid var(--color-warning-3)',
+              borderRadius: 8,
+              marginBottom: 16,
+              fontSize: 12,
+              color: 'var(--color-text-2)',
+            }}
+          >
+            ⚠️ 当单位为 <strong>%</strong> 时，下方最小/最大/步长/默认值请<strong>直接填写百分比数值</strong>
+            （如 50、100、1、78），系统自动转换存储为小数。
+          </div>
+
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item label="最小值" field="min" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="最大值" field="max" initialValue={100}>
+                <InputNumber style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item label="步长" field="step" initialValue={1}>
+                <InputNumber style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="默认值" field="default" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item label="描述（Tooltip 提示）" field="description">
+            <Input.TextArea placeholder="该参数的含义和注意事项" rows={2} />
+          </Form.Item>
+        </Form>
+      </Drawer>
+    </div>
+  );
+};

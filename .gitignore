@@ -1,0 +1,5 @@
+.kiro/
+test_*
+.pytest_cache/
+__pycache__/
+client/node_modules

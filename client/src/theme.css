@@ -1,0 +1,167 @@
+/* 全局主题样式 - 简洁现代风格 */
+
+:root {
+  /* 简洁配色方案 */
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+
+  /* 功能色 */
+  --color-primary: #4a90e2;
+  --color-success: #52c41a;
+  --color-warning: #faad14;
+  --color-danger: #f5222d;
+  --color-info: #1890ff;
+
+  /* 文字色 */
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+
+  /* 边框色 */
+  --border-light: #e5e7eb;
+  --border-medium: #d1d5db;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/* 全局样式增强 */
+.modern-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light);
+  transition: all 0.3s ease;
+}
+
+.modern-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.modern-button {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.modern-button:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.modern-input {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.modern-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+/* Arco Design 组件覆盖 */
+.arco-btn {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-sm) !important;
+  font-weight: 500;
+}
+
+.arco-btn:hover {
+  box-shadow: var(--shadow-md) !important;
+  transform: translateY(-1px);
+}
+
+.arco-btn-primary {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%) !important;
+}
+
+.arco-card {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+  border: 1px solid var(--border-light) !important;
+}
+
+.arco-select,
+.arco-input,
+.arco-input-number,
+.arco-picker {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.arco-select:hover,
+.arco-input:hover,
+.arco-input-number:hover,
+.arco-picker:hover {
+  box-shadow: var(--shadow-md) !important;
+}
+
+.arco-modal {
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-xl) !important;
+}
+
+.arco-tag {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* 页面容器 */
+.page-container {
+  background: var(--bg-primary);
+  min-height: 100vh;
+}
+
+.page-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 渐变按钮效果 */
+.gradient-button {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  border: none;
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+.gradient-button:hover {
+  background: linear-gradient(135deg, #357abd 0%, #2868a8 100%);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 状态颜色 */
+.status-success {
+  color: var(--color-success);
+  background: rgba(82, 196, 26, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+}
+
+.status-warning {
+  color: var(--color-warning);
+  background: rgba(250, 173, 20, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+}
+
+.status-danger {
+  color: var(--color-danger);
+  background: rgba(245, 34, 45, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+}

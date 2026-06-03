@@ -1,0 +1,334 @@
+/**
+ * 全局样式
+ * 基于 Arco Design 和设计令牌的全局样式定义
+ */
+
+:root {
+  /* 颜色变量 */
+  --primary-color: #165DFF;
+  --primary-hover: #4080FF;
+  --primary-active: #0E42D2;
+
+  --success-color: #00B42A;
+  --warning-color: #FF7D00;
+  --danger-color: #F53F3F;
+  --info-color: #165DFF;
+
+  --gray-1: #F7F8FA;
+  --gray-2: #F2F3F5;
+  --gray-3: #E5E6EB;
+  --gray-4: #C9CDD4;
+  --gray-5: #A9AEB8;
+  --gray-6: #86909C;
+  --gray-7: #6B7785;
+  --gray-8: #4E5969;
+  --gray-9: #272E3B;
+  --gray-10: #1D2129;
+
+  /* 间距变量 */
+  --spacing-mini: 4px;
+  --spacing-small: 8px;
+  --spacing-medium: 16px;
+  --spacing-large: 24px;
+  --spacing-xlarge: 32px;
+  --spacing-xxlarge: 48px;
+
+  /* 圆角变量 */
+  --radius-small: 2px;
+  --radius-medium: 4px;
+  --radius-large: 8px;
+  --radius-xlarge: 16px;
+
+  /* 阴影变量 */
+  --shadow-light: 0 1px 4px rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 2px 8px rgba(0, 0, 0, 0.10);
+  --shadow-heavy: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-strong: 0 8px 24px rgba(0, 0, 0, 0.15);
+
+  /* 过渡动画 */
+  --transition-fast: 0.1s;
+  --transition-normal: 0.2s;
+  --transition-slow: 0.3s;
+}
+
+/* 全局重置 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--gray-10);
+  background-color: var(--gray-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gray-2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gray-4);
+  border-radius: 4px;
+  transition: background var(--transition-normal);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-5);
+}
+
+/* 页面布局通用类 */
+.page-container {
+  height: 100%;
+  padding: var(--spacing-large);
+  overflow-y: auto;
+}
+
+.page-header {
+  margin-bottom: var(--spacing-large);
+}
+
+.page-content {
+  background: white;
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-medium);
+  padding: var(--spacing-large);
+}
+
+/* 卡片样式增强 */
+.arco-card {
+  border-radius: var(--radius-large) !important;
+  box-shadow: var(--shadow-medium) !important;
+  transition: all var(--transition-normal);
+}
+
+.arco-card:hover {
+  box-shadow: var(--shadow-heavy) !important;
+}
+
+/* 按钮样式增强 */
+.arco-btn {
+  border-radius: var(--radius-medium) !important;
+  font-weight: 500;
+  transition: all var(--transition-normal);
+}
+
+.arco-btn-primary {
+  box-shadow: 0 2px 4px rgba(22, 93, 255, 0.2);
+}
+
+.arco-btn-primary:hover {
+  box-shadow: 0 4px 8px rgba(22, 93, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* 表格样式增强 */
+.arco-table {
+  border-radius: var(--radius-large) !important;
+}
+
+.arco-table-th {
+  background-color: var(--gray-2) !important;
+  font-weight: 600 !important;
+  color: var(--gray-9) !important;
+}
+
+.arco-table-tr:hover {
+  background-color: var(--gray-1) !important;
+}
+
+/* 输入框样式增强 */
+.arco-input,
+.arco-select-view,
+.arco-picker {
+  border-radius: var(--radius-medium) !important;
+  transition: all var(--transition-normal);
+}
+
+.arco-input:focus,
+.arco-select-view-focus,
+.arco-picker-focused {
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.1) !important;
+}
+
+/* 模态框样式增强 */
+.arco-modal {
+  border-radius: var(--radius-xlarge) !important;
+}
+
+.arco-modal-header {
+  border-bottom: 1px solid var(--gray-3);
+  padding: var(--spacing-large) !important;
+}
+
+.arco-modal-content {
+  padding: var(--spacing-large) !important;
+}
+
+/* 统计卡片样式 */
+.statistic-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: var(--radius-large);
+  padding: var(--spacing-large);
+  color: white;
+  box-shadow: var(--shadow-heavy);
+}
+
+/* 加载状态 */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+}
+
+/* 空状态样式 */
+.empty-state {
+  padding: var(--spacing-xxlarge);
+  text-align: center;
+  color: var(--gray-6);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: var(--spacing-medium);
+  opacity: 0.5;
+}
+
+/* 渐变背景 */
+.gradient-bg-blue {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-bg-green {
+  background: linear-gradient(135deg, #0ba360 0%, #3cba92 100%);
+}
+
+.gradient-bg-orange {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+/* 工具类 */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 响应式间距 */
+@media (max-width: 768px) {
+  .page-container {
+    padding: var(--spacing-medium);
+  }
+
+  .page-content {
+    padding: var(--spacing-medium);
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn var(--transition-normal) ease-out;
+}
+
+/* 高亮效果 */
+.highlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.highlight::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.highlight:hover::before {
+  left: 100%;
+}
