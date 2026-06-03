@@ -5,6 +5,7 @@ import {
 import { useState, useEffect } from 'react';
 import { IconPlus, IconEdit, IconDelete, IconRefresh, IconFire } from '@arco-design/web-react/icon';
 import { InlineLoading } from '../components/LoadingScreen';
+import { PageHeader } from '../components/common';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -112,52 +113,37 @@ export const PromotionPage = () => {
   }
 
   return (
-    <div className='h-full flex flex-col' style={{ background: '#f8f9fa' }}>
-      {/* 顶部标题栏 */}
-      <div className='bg-white' style={{ borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <div className='max-w-7xl mx-auto px-8 py-6'>
-          <div className='flex justify-between items-center'>
-            <div>
-              <Title heading={3} style={{ margin: 0, marginBottom: 4, color: '#1f2937' }}>
-                🔥 活动规划
-              </Title>
-              <Text type='secondary' style={{ color: '#6b7280' }}>配置不同级别的营销活动，精准预估流量爆发</Text>
-            </div>
-            <Space>
-              <Button
-                icon={<IconRefresh />}
-                onClick={loadPromotions}
-                size='large'
-              >
-                刷新
-              </Button>
-              <Button
-                type='primary'
-                icon={<IconPlus />}
-                onClick={handleAdd}
-                size='large'
-              >
-                创建活动
-              </Button>
-            </Space>
-          </div>
-        </div>
-      </div>
+    <div className='page-container' style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+      {/* 页面头部 */}
+      <PageHeader
+        title='活动规划'
+        subtitle='配置不同级别的营销活动，精准预估流量爆发'
+        icon='🔥'
+        extra={
+          <Space size='medium'>
+            <Button
+              icon={<IconRefresh />}
+              onClick={loadPromotions}
+              size='large'
+            >
+              刷新
+            </Button>
+            <Button
+              type='primary'
+              icon={<IconPlus />}
+              onClick={handleAdd}
+              size='large'
+            >
+              创建活动
+            </Button>
+          </Space>
+        }
+      />
 
       {/* 内容区域 */}
-      <div className='flex-1 overflow-y-auto p-6'>
-        <div className='max-w-6xl mx-auto'>
+      <div className='page-content'>
           {promotions.length === 0 ? (
-            <Card
-              bordered={false}
-              style={{
-                borderRadius: 12,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                background: 'white',
-                textAlign: 'center',
-                padding: '60px 20px'
-              }}
-            >
+            <div className='empty-state'>
               <div className='text-6xl mb-4'>🎯</div>
               <Title heading={5} style={{ marginBottom: 12 }}>暂无活动方案</Title>
               <Text type='secondary' style={{ fontSize: 14, display: 'block', marginBottom: 24 }}>
@@ -171,7 +157,7 @@ export const PromotionPage = () => {
               >
                 创建活动
               </Button>
-            </Card>
+            </div>
           ) : (
             <div>
               {/* 活动方案卡片 */}
@@ -188,8 +174,9 @@ export const PromotionPage = () => {
                       bordered={false}
                       style={{
                         borderRadius: 12,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                        border: `2px solid ${color}30`
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                        border: '1px solid var(--color-border-2)',
+                        background: 'var(--color-bg-2)'
                       }}
                     >
                       {/* 头部 */}
@@ -241,18 +228,8 @@ export const PromotionPage = () => {
                 })}
               </div>
 
-              {/* 级别说明 */}
-              <Card
-                bordered={false}
-                style={{
-                  marginTop: 16,
-                  borderRadius: 8,
-                  background: '#fef3c7',
-                  padding: '12px 16px'
-                }}
-                bodyStyle={{ padding: 0 }}
-              >
-                <div className='flex items-center justify-between text-sm'>
+              <div className='info-banner' style={{ marginTop: 'var(--spacing-medium)', background: 'var(--color-fill-1)', border: '1px solid var(--color-border-1)', borderRadius: 8 }}>
+                <div className='flex items-center justify-between text-sm' style={{ color: 'var(--color-text-1)' }}>
                   <Space size='large'>
                     <span><strong>S级</strong>: 2.5+ 倍</span>
                     <span><strong>A级</strong>: 1.8-2.5 倍</span>
@@ -263,10 +240,9 @@ export const PromotionPage = () => {
                     💡 系数越高，预估流量越大
                   </Text>
                 </div>
-              </Card>
+              </div>
             </div>
           )}
-        </div>
       </div>
 
       {/* 创建/编辑活动模态框 */}
@@ -362,8 +338,8 @@ export const PromotionPage = () => {
             />
           </Form.Item>
 
-          <div className='p-5 rounded-lg mb-4' style={{ background: 'linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%)' }}>
-            <Paragraph style={{ margin: 0, fontSize: 13, color: '#00695c', lineHeight: 1.8 }}>
+          <div className='p-5 rounded-lg mb-4' style={{ background: 'var(--color-primary-light-1)', border: '1px solid var(--color-primary-light-2)' }}>
+            <Paragraph style={{ margin: 0, fontSize: 13, color: 'var(--color-primary-6)', lineHeight: 1.8 }}>
               <strong>💡 系数设置指南：</strong><br/>
               • <strong>1.0 - 1.3 (C级)</strong>：日常运营期，无特殊促销<br/>
               • <strong>1.3 - 1.8 (B级)</strong>：品类日、主题促销活动<br/>

@@ -83,6 +83,8 @@ export class DBManager {
         scheme_name TEXT NOT NULL,
         params_json TEXT NOT NULL,
         result_json TEXT,
+        start_date TEXT,
+        end_date TEXT,
         description TEXT,
         create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -116,11 +118,58 @@ export class DBManager {
       )
     `);
 
+    // 8. 部门表
+    this._db.exec(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dept_name TEXT NOT NULL,
+        description TEXT,
+        parent_id INTEGER,
+        status INTEGER DEFAULT 1,
+        create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 9. 人员表
+    this._db.exec(`
+      CREATE TABLE IF NOT EXISTS personnel (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        staff_id TEXT UNIQUE,
+        dept_id INTEGER,
+        position TEXT,
+        phone TEXT,
+        status INTEGER DEFAULT 1,
+        create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (dept_id) REFERENCES departments(id) ON DELETE SET NULL
+      )
+    `);
+
+    // 10. 排班记录表 (关联人员和班次)
+    this._db.exec(`
+      CREATE TABLE IF NOT EXISTS shift_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        personnel_id INTEGER NOT NULL,
+        shift_id INTEGER NOT NULL,
+        assignment_date TEXT NOT NULL,
+        remark TEXT,
+        create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (personnel_id) REFERENCES personnel(id) ON DELETE CASCADE,
+        FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE
+      )
+    `);
+
     // 创建索引
     this._db.exec(`
       CREATE INDEX IF NOT EXISTS idx_project_id ON history_biz_data(project_id);
       CREATE INDEX IF NOT EXISTS idx_data_date ON history_biz_data(data_date);
       CREATE INDEX IF NOT EXISTS idx_project_active ON history_projects(is_active);
+      CREATE INDEX IF NOT EXISTS idx_dept_parent ON departments(parent_id);
+      CREATE INDEX IF NOT EXISTS idx_personnel_dept ON personnel(dept_id);
+      CREATE INDEX IF NOT EXISTS idx_assignment_date ON shift_assignments(assignment_date);
+      CREATE INDEX IF NOT EXISTS idx_assignment_personnel ON shift_assignments(personnel_id);
     `);
 
     // 数据迁移：如果旧表存在且新表project_id列不存在，进行迁移

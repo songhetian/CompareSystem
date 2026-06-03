@@ -4,6 +4,7 @@ import {
 import { useState, useEffect } from 'react';
 import { IconDelete, IconRefresh, IconEye, IconHistory, IconCalendar } from '@arco-design/web-react/icon';
 import { InlineLoading } from '../components/LoadingScreen';
+import { PageHeader, StatsCard } from '../components/common';
 
 const { Title, Text } = Typography;
 
@@ -57,82 +58,62 @@ export const ReportPage = () => {
   }
 
   return (
-    <div className='h-full flex flex-col' style={{ background: '#f8f9fa' }}>
-      {/* 顶部标题栏 */}
-      <div className='bg-white' style={{ borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <div className='max-w-7xl mx-auto px-8 py-6'>
-          <div className='flex justify-between items-center'>
-            <div>
-              <Title heading={3} style={{ margin: 0, marginBottom: 4, color: '#1f2937' }}>
-                📊 历史记录
-              </Title>
-              <Text type='secondary' style={{ color: '#6b7280' }}>查看过往测算记录，挖掘人力配置规律</Text>
-            </div>
-            <Space>
-              <Button
-                icon={<IconRefresh />}
-                onClick={loadHistory}
-                size='large'
-              >
-                刷新
-              </Button>
-            </Space>
-          </div>
-        </div>
-      </div>
+    <div className='page-container' style={{ maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+      {/* 页面头部 */}
+      <PageHeader
+        title='测算报告'
+        subtitle='查看过往测算记录，挖掘人力配置规律'
+        icon='📊'
+        extra={
+          <Button
+            icon={<IconRefresh />}
+            onClick={loadHistory}
+            size='large'
+          >
+            刷新
+          </Button>
+        }
+      />
 
       {/* 内容区域 */}
-      <div className='flex-1 overflow-y-auto p-8'>
-        <div className='max-w-6xl mx-auto'>
+      <div className='page-content'>
           {history.length === 0 ? (
-            <Card
-              bordered={false}
-              style={{
-                borderRadius: 16,
-                boxShadow: '0 20px 60px rgba(0,0,0,0.1)',
-                background: 'white',
-                textAlign: 'center',
-                padding: '80px 20px'
-              }}
-            >
+            <div className='empty-state'>
               <div className='text-8xl mb-6'>📊</div>
               <Title heading={4} style={{ marginBottom: 16 }}>暂无历史记录</Title>
               <Text type='secondary' style={{ fontSize: 15, display: 'block', marginBottom: 32 }}>
                 完成人力测算后，系统会自动保存记录<br/>
                 您可以随时查看和对比历史方案
               </Text>
-            </Card>
+            </div>
           ) : (
             <div>
               {/* 统计概览 */}
-              <div className='grid grid-cols-3 gap-4 mb-8'>
-                <Card bordered={false} style={{ borderRadius: 12, background: 'white' }}>
-                  <Statistic
-                    title="累计记录数"
-                    value={history.length}
-                    suffix="条"
-                    styleValue={{ color: '#00bfa5' }}
-                  />
-                </Card>
-                <Card bordered={false} style={{ borderRadius: 12, background: 'white' }}>
-                  <Statistic
-                    title="最近测算"
-                    value={history.length > 0 ? new Date(history[0].create_time).toLocaleDateString('zh-CN') : '-'}
-                    styleValue={{ color: '#7c4dff', fontSize: 16 }}
-                  />
-                </Card>
-                <Card bordered={false} style={{ borderRadius: 12, background: 'white' }}>
-                  <Statistic
-                    title="本月记录"
-                    value={history.filter(h => {
-                      const date = new Date(h.create_time);
-                      const now = new Date();
-                      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-                    }).length}
-                    suffix="条"
-                    styleValue={{ color: '#ff6b6b' }}
-                  />
-                </Card>
+              <div className='grid grid-cols-3 gap-4' style={{ marginBottom: 'var(--spacing-large)' }}>
+                <StatsCard
+                  title="累计记录数"
+                  value={history.length}
+                  suffix="条"
+                  icon='📝'
+                  color='#00bfa5'
+                />
+                <StatsCard
+                  title="最近测算"
+                  value={history.length > 0 ? new Date(history[0].create_time).toLocaleDateString('zh-CN') : '-'}
+                  icon='📅'
+                  color='#7c4dff'
+                />
+                <StatsCard
+                  title="本月记录"
+                  value={history.filter(h => {
+                    const date = new Date(h.create_time);
+                    const now = new Date();
+                    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                  }).length}
+                  suffix="条"
+                  icon='📊'
+                  color='#ff6b6b'
+                />
               </div>
 
               {/* 时间线样式的记录列表 */}
@@ -234,14 +215,7 @@ export const ReportPage = () => {
               </div>
 
               {/* 底部提示 */}
-              <Card
-                bordered={false}
-                style={{
-                  marginTop: 24,
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)'
-                }}
-              >
+              <div className='info-banner' style={{ marginTop: 'var(--spacing-large)' }}>
                 <Space direction='vertical' size='small'>
                   <Text bold>💡 数据管理建议</Text>
                   <Text style={{ fontSize: 13, lineHeight: 1.8 }}>
@@ -250,10 +224,9 @@ export const ReportPage = () => {
                     • 导出历史数据用于长期趋势分析和决策支持
                   </Text>
                 </Space>
-              </Card>
+              </div>
             </div>
           )}
-        </div>
       </div>
 
       {/* 详情模态框 */}
@@ -271,15 +244,15 @@ export const ReportPage = () => {
             关闭
           </Button>
         }
-        style={{ width: 900 }}
+        style={{ width: 900, borderRadius: 12 }}
       >
         {currentRecord && (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {/* 基本信息 */}
             <Card
               title={<Text bold>📋 基本信息</Text>}
-              bordered
-              style={{ marginBottom: 20, borderRadius: 8 }}
+              bordered={false}
+              style={{ borderRadius: 12, background: 'var(--color-bg-2)', border: '1px solid var(--color-border-2)' }}
             >
               <Descriptions
                 column={2}
@@ -312,23 +285,30 @@ export const ReportPage = () => {
             {/* 参数配置 */}
             {currentRecord.params_json && (
               <Card
-                title={<Text bold>⚙️ 参数配置</Text>}
-                bordered
-                style={{ marginBottom: 20, borderRadius: 8 }}
+                title={<Text bold>⚙️ 核心参数</Text>}
+                bordered={false}
+                style={{ borderRadius: 12, background: 'var(--color-bg-2)', border: '1px solid var(--color-border-2)' }}
               >
-                <div
-                  className='p-4 rounded'
-                  style={{
-                    background: '#f7f8fa',
-                    maxHeight: 300,
-                    overflowY: 'auto',
-                    fontFamily: 'Monaco, Consolas, monospace'
-                  }}
-                >
-                  <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.6 }}>
-                    {JSON.stringify(JSON.parse(currentRecord.params_json), null, 2)}
-                  </pre>
-                </div>
+                {(() => {
+                  try {
+                    const params = JSON.parse(currentRecord.params_json);
+                    return (
+                      <Descriptions
+                        column={3}
+                        data={[
+                          { label: '售前处理时长', value: `${params.presale_handle_time || 4.5} 分钟` },
+                          { label: '售中处理时长', value: `${params.midsale_handle_time || 3.0} 分钟` },
+                          { label: '售后处理时长', value: `${params.aftersale_handle_time || 6.5} 分钟` },
+                          { label: '询单转化率', value: `${((params.c_to_o || 0.45) * 100).toFixed(0)}%` },
+                          { label: '付款售后率', value: `${((params.payment_to_aftersale || 0.15) * 100).toFixed(0)}%` },
+                          { label: '客单价', value: `${params.avg_order_value || 200} 元` },
+                        ]}
+                      />
+                    );
+                  } catch (e) {
+                    return <Text type='secondary'>参数解析失败</Text>;
+                  }
+                })()}
               </Card>
             )}
 
@@ -336,22 +316,47 @@ export const ReportPage = () => {
             {currentRecord.result_json && (
               <Card
                 title={<Text bold>📊 测算结果</Text>}
-                bordered
-                style={{ borderRadius: 8 }}
+                bordered={false}
+                style={{ borderRadius: 12, background: 'var(--color-bg-2)', border: '1px solid var(--color-border-2)' }}
               >
-                <div
-                  className='p-4 rounded'
-                  style={{
-                    background: '#e0f7fa',
-                    maxHeight: 400,
-                    overflowY: 'auto',
-                    fontFamily: 'Monaco, Consolas, monospace'
-                  }}
-                >
-                  <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: '#00695c' }}>
-                    {JSON.stringify(JSON.parse(currentRecord.result_json), null, 2)}
-                  </pre>
-                </div>
+                {(() => {
+                  try {
+                    const res = JSON.parse(currentRecord.result_json);
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                        <div style={{ background: 'rgba(22,93,255,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(22,93,255,0.1)' }}>
+                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>建议总编制</div>
+                          <div style={{ color: '#165dff', fontSize: 24, fontWeight: 'bold' }}>{res.needed_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
+                        </div>
+                        <div style={{ background: 'rgba(0,180,42,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(0,180,42,0.1)' }}>
+                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>售前人员</div>
+                          <div style={{ color: '#00b42a', fontSize: 24, fontWeight: 'bold' }}>{res.presale_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
+                        </div>
+                        <div style={{ background: 'rgba(255,125,0,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(255,125,0,0.1)' }}>
+                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>售中人员</div>
+                          <div style={{ color: '#ff7d00', fontSize: 24, fontWeight: 'bold' }}>{res.midsale_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
+                        </div>
+                        <div style={{ background: 'rgba(245,63,63,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(245,63,63,0.1)' }}>
+                          <div style={{ color: 'var(--color-text-3)', fontSize: 13, marginBottom: 8 }}>售后人员</div>
+                          <div style={{ color: '#f53f3f', fontSize: 24, fontWeight: 'bold' }}>{res.aftersale_staff} <span style={{ fontSize: 14, fontWeight: 'normal' }}>人</span></div>
+                        </div>
+                        
+                        <div style={{ gridColumn: 'span 4', marginTop: 16 }}>
+                          <Descriptions
+                            column={3}
+                            data={[
+                              { label: '日均接待预估', value: `${Math.round(res.daily_consult || 0)} 次` },
+                              { label: '理论峰值日', value: `${res.theoretical_peak || 0} 人` },
+                              { label: '日均工时负荷', value: `${(res.daily_hours || 0).toFixed(1)} 小时` },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                    );
+                  } catch (e) {
+                    return <Text type='secondary'>结果解析失败</Text>;
+                  }
+                })()}
               </Card>
             )}
           </div>

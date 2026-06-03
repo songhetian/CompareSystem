@@ -1,0 +1,792 @@
+import { describe, it, expect } from 'vitest';
+import { ManpowerCalculator, type CalcParams } from './calculator';
+import dayjs from 'dayjs';
+
+/**
+ * Bug Condition Exploration Tests
+ *
+ * These tests verify the bug exists in the unfixed code.
+ * They encode the expected behavior and will validate the fix when it passes.
+ *
+ * **Validates: Requirements 1.1, 1.2, 1.3, 1.5**
+ */
+describe('Bug Condition Exploration - Peak Day Staff Multiplier', () => {
+  /**
+   * **Property 1: Bug Condition** - Peak Day Staff Multiplier Not Applied
+   *
+   * **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+   * **DO NOT attempt to fix the test or the code when it fails**
+   * **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+   * **GOAL**: Surface counterexamples that demonstrate the bug exists
+   *
+   * Test Scenario:
+   * - 7-day calculation period
+   * - Day 4 is a peak date (peakDates = [day 4])
+   * - peak_day_factor = 1.5 (default)
+   * - No event dates, no promotion factor, no history data (baseline scenario)
+   *
+   * Expected Behavior:
+   * - Day 4 has isPeakDay = true
+   * - Day 4's staff value should be >= day 3's staff * 1.3 (at least 30% higher)
+   * - Day 4's staff value should be approximately day 3's staff * 1.5 (within rounding tolerance of ±2)
+   *
+   * **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bug exists)
+   *
+   * Counterexamples to document:
+   * - Expected: day 4 staff should be significantly higher (e.g., 45 vs 30)
+   * - Actual: day 4 staff is the same or only slightly different (e.g., 31 vs 30)
+   * - Root cause: isPeakDay flag is set but not used in getRawDemand calculation
+   */
+  it('should apply peak day multiplier to staff calculation for peak dates', () => {
+    // Arrange: Create a 7-day test scenario with day 4 as peak date
+    const targetSales = 100000; // 10万元销售目标
+    const days = 7;
+    const calcStartDate = dayjs('2024-01-01');
+    const peakDate = calcStartDate.add(3, 'day'); // Day 4 (0-indexed, so add 3)
+
+    // Baseline parameters - minimal configuration to isolate the bug
+    const params: CalcParams = {
+      // Basic business parameters
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+
+      // Conversion funnel
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+
+      // Time offsets
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+
+      // Job efficiency parameters
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72,
+
+      // Peak day factor - this is what should be applied but currently isn't
+      peak_day_factor: 1.5
+    };
+
+    // Act: Calculate with peak date (but current code doesn't support peakDates parameter yet)
+    // Note: The current implementation incorrectly uses eventDates for peak day marking
+    // This is part of the bug - peakDates should be a separate parameter
+    const result = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null, // No event type (daily mode)
+      [peakDate], // Using eventDates as a workaround since peakDates parameter doesn't exist yet
+      calcStartDate,
+      params,
+      undefined, // No promotion factor
+      undefined, // No target visitors override
+      1, // Min staff
+      undefined // No history data
+    );
+
+    // Assert: Verify the bug condition
+    const dailyResults = result.daily_results;
+
+    // Find day 3 and day 4 (0-indexed, so indices 2 and 3)
+    const day3 = dailyResults[2];
+    const day4 = dailyResults[3];
+
+    // Assertion 1: Day 4 should be marked as a peak day
+    expect(day4.isPeakDay).toBe(true);
+    expect(day4.fullDate).toBe('2024-01-04');
+
+    // Assertion 2: Day 4's staff should be at least 30% higher than day 3
+    // This validates that the peak_day_factor (1.5x) is being applied
+    const minExpectedStaff = day3.staff * 1.3;
+    expect(day4.staff).toBeGreaterThanOrEqual(minExpectedStaff);
+
+    // Assertion 3: Day 4's staff should be approximately 1.5x of day 3's staff
+    // Allow for rounding tolerance of ±2
+    const expectedStaff = day3.staff * 1.5;
+    const tolerance = 2;
+    expect(Math.abs(day4.staff - expectedStaff)).toBeLessThanOrEqual(tolerance);
+
+    // Log the results for debugging and counterexample documentation
+    console.log('=== Bug Condition Exploration Results ===');
+    console.log(`Day 3 (non-peak): staff=${day3.staff}, isPeakDay=${day3.isPeakDay}`);
+    console.log(`Day 4 (peak): staff=${day4.staff}, isPeakDay=${day4.isPeakDay}`);
+    console.log(`Expected day 4 staff (with 1.5x multiplier): ${expectedStaff}`);
+    console.log(`Actual day 4 staff: ${day4.staff}`);
+    console.log(`Difference: ${day4.staff - day3.staff} (${((day4.staff / day3.staff - 1) * 100).toFixed(1)}% increase)`);
+    console.log(`Expected minimum increase: ${minExpectedStaff - day3.staff} (30% increase)`);
+    console.log('=========================================');
+  });
+
+  /**
+   * Additional test: Multiple peak days
+   *
+   * Verifies that the bug affects multiple peak days, not just a single day.
+   * This helps confirm the root cause is systemic (isPeakDay not used in calculation)
+   * rather than a one-off issue.
+   */
+  it('should apply peak day multiplier to multiple peak dates', () => {
+    // Arrange: Create a 14-day test scenario with days 5 and 10 as peak dates
+    const targetSales = 200000;
+    const days = 14;
+    const calcStartDate = dayjs('2024-01-01');
+    const peakDate1 = calcStartDate.add(4, 'day'); // Day 5
+    const peakDate2 = calcStartDate.add(9, 'day'); // Day 10
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72,
+      peak_day_factor: 1.5
+    };
+
+    // Act
+    const result = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [peakDate1, peakDate2],
+      calcStartDate,
+      params,
+      undefined,
+      undefined,
+      1,
+      undefined
+    );
+
+    const dailyResults = result.daily_results;
+
+    // Assert: Both peak days should have multiplier applied
+    const day4 = dailyResults[3]; // Adjacent non-peak day
+    const day5 = dailyResults[4]; // Peak day
+    const day9 = dailyResults[8]; // Adjacent non-peak day
+    const day10 = dailyResults[9]; // Peak day
+
+    // Verify peak day flags
+    expect(day5.isPeakDay).toBe(true);
+    expect(day10.isPeakDay).toBe(true);
+
+    // Verify day 5 has multiplier applied
+    expect(day5.staff).toBeGreaterThanOrEqual(day4.staff * 1.3);
+    const expectedStaff5 = day4.staff * 1.5;
+    expect(Math.abs(day5.staff - expectedStaff5)).toBeLessThanOrEqual(2);
+
+    // Verify day 10 has multiplier applied
+    expect(day10.staff).toBeGreaterThanOrEqual(day9.staff * 1.3);
+    const expectedStaff10 = day9.staff * 1.5;
+    expect(Math.abs(day10.staff - expectedStaff10)).toBeLessThanOrEqual(2);
+
+    console.log('=== Multiple Peak Days Results ===');
+    console.log(`Day 5 (peak): staff=${day5.staff}, expected≈${expectedStaff5}`);
+    console.log(`Day 10 (peak): staff=${day10.staff}, expected≈${expectedStaff10}`);
+    console.log('===================================');
+  });
+});
+
+/**
+ * Preservation Property Tests
+ *
+ * These tests verify that non-peak date calculations remain unchanged.
+ * They follow the observation-first methodology:
+ * 1. Run on UNFIXED code to observe baseline behavior
+ * 2. After fix implementation, re-run to ensure behavior is preserved
+ *
+ * **EXPECTED OUTCOME**: Tests PASS on unfixed code (confirms baseline behavior)
+ * **AFTER FIX**: Tests MUST STILL PASS (confirms preservation)
+ *
+ * **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8**
+ */
+describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchanged', () => {
+  /**
+   * Test 1: When peakDates is empty, all days should have identical calculation logic
+   *
+   * **Validates: Requirement 3.1**
+   * - WHEN user does not select any peak dates
+   * - THEN system should maintain existing calculation logic
+   * - All dates calculated with uniform weights and factors
+   */
+  it('should preserve existing logic when no peak dates are selected', () => {
+    // Arrange: 7-day scenario with NO peak dates
+    const targetSales = 100000;
+    const days = 7;
+    const calcStartDate = dayjs('2024-01-01');
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72
+    };
+
+    // Act: Calculate with empty peak dates array
+    const result = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null, // No event type (daily mode)
+      [], // NO peak dates
+      calcStartDate,
+      params,
+      undefined,
+      undefined,
+      1,
+      undefined
+    );
+
+    // Assert: All days should have isPeakDay = false
+    const dailyResults = result.daily_results;
+
+    dailyResults.forEach((day, index) => {
+      expect(day.isPeakDay).toBe(false);
+      console.log(`Day ${index + 1}: staff=${day.staff}, isPeakDay=${day.isPeakDay}`);
+    });
+
+    // Verify that calculation logic is consistent (no special handling)
+    // In daily mode with no events, staff values should be relatively uniform
+    const staffValues = dailyResults.map(d => d.staff);
+    const avgStaff = staffValues.reduce((a, b) => a + b, 0) / staffValues.length;
+    const maxDeviation = Math.max(...staffValues.map(s => Math.abs(s - avgStaff)));
+
+    // In uniform distribution mode, deviation should be minimal (within 20% of average)
+    expect(maxDeviation / avgStaff).toBeLessThan(0.2);
+
+    console.log('=== Preservation Test 1: No Peak Dates ===');
+    console.log(`Average staff: ${avgStaff.toFixed(1)}`);
+    console.log(`Max deviation: ${maxDeviation.toFixed(1)} (${(maxDeviation / avgStaff * 100).toFixed(1)}%)`);
+    console.log('===========================================');
+  });
+
+  /**
+   * Test 2: When a day is not a peak day, staff calculation should match baseline
+   *
+   * **Validates: Requirement 3.2, 3.8**
+   * - WHEN user selects peak dates but testing non-peak days
+   * - THEN non-peak days should use standard calculation logic
+   * - isPeakDay = false for non-peak days
+   */
+  it('should preserve calculation logic for non-peak days in mixed scenario', () => {
+    // Arrange: 7-day scenario with day 4 as peak date
+    // We'll verify that days 1, 2, 3, 5, 6, 7 are unaffected
+    const targetSales = 100000;
+    const days = 7;
+    const calcStartDate = dayjs('2024-01-01');
+    const peakDate = calcStartDate.add(3, 'day'); // Day 4
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72
+    };
+
+    // First, get baseline results with no peak dates
+    const baselineResult = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [], // No peak dates for baseline
+      calcStartDate,
+      params,
+      undefined,
+      undefined,
+      1,
+      undefined
+    );
+
+    // Then, get results with peak date
+    const resultWithPeak = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [peakDate], // Day 4 is peak
+      calcStartDate,
+      params,
+      undefined,
+      undefined,
+      1,
+      undefined
+    );
+
+    // Assert: Non-peak days should match baseline (days 0-2 and 4-6)
+    const nonPeakIndices = [0, 1, 2, 4, 5, 6];
+
+    console.log('=== Preservation Test 2: Non-Peak Days ===');
+    nonPeakIndices.forEach(i => {
+      const baseline = baselineResult.daily_results[i];
+      const withPeak = resultWithPeak.daily_results[i];
+
+      // Non-peak day flag should be false
+      expect(withPeak.isPeakDay).toBe(false);
+
+      // Staff values should match baseline exactly (before fix is applied)
+      expect(withPeak.staff).toBe(baseline.staff);
+      expect(withPeak.presale).toBe(baseline.presale);
+      expect(withPeak.midsale).toBe(baseline.midsale);
+      expect(withPeak.aftersale).toBe(baseline.aftersale);
+
+      console.log(`Day ${i + 1}: baseline=${baseline.staff}, withPeak=${withPeak.staff}, match=${baseline.staff === withPeak.staff}`);
+    });
+    console.log('===========================================');
+  });
+
+  /**
+   * Test 3: Promotion factor should affect traffic volume independently of peak dates
+   *
+   * **Validates: Requirement 3.3**
+   * - WHEN user selects a promotion (promotionFactor) without peak dates
+   * - THEN promotion factor should scale traffic volume normally
+   * - Promotion logic operates independently of peak date logic
+   */
+  it('should preserve promotion factor logic independently of peak dates', () => {
+    // Arrange: 7-day scenario with promotion but NO peak dates
+    const targetSales = 100000;
+    const days = 7;
+    const calcStartDate = dayjs('2024-01-01');
+    const promotionFactor = 2.8; // S-level promotion
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72
+    };
+
+    // Baseline: no promotion, no peak dates
+    const baselineResult = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [],
+      calcStartDate,
+      params,
+      undefined, // No promotion
+      undefined,
+      1,
+      undefined
+    );
+
+    // With promotion: promotion factor, no peak dates
+    const withPromotionResult = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [],
+      calcStartDate,
+      params,
+      promotionFactor, // Add promotion factor
+      undefined,
+      1,
+      undefined
+    );
+
+    // Assert: Promotion should increase staff proportionally
+    const baselinePeak = baselineResult.theoretical_peak;
+    const promotionPeak = withPromotionResult.theoretical_peak;
+
+    // Promotion factor affects total presale volume (eventF multiplier in line 229)
+    // This should result in roughly proportional staff increase
+    const staffRatio = promotionPeak / baselinePeak;
+
+    // The ratio should reflect the promotion impact (not exactly 2.8x due to visitor baseline)
+    // But it should be significantly higher (at least 1.5x)
+    expect(staffRatio).toBeGreaterThan(1.5);
+
+    console.log('=== Preservation Test 3: Promotion Factor ===');
+    console.log(`Baseline peak staff: ${baselinePeak}`);
+    console.log(`With promotion peak staff: ${promotionPeak}`);
+    console.log(`Staff ratio: ${staffRatio.toFixed(2)}x`);
+    console.log(`Promotion factor: ${promotionFactor}x`);
+    console.log('=============================================');
+  });
+
+  /**
+   * Test 4: History data weight distribution should remain unchanged
+   *
+   * **Validates: Requirement 3.4**
+   * - WHEN system uses history data trend pattern (historyData parameter exists)
+   * - THEN history data weight distribution logic should remain unchanged
+   * - Peak day factor should only apply at final manpower calculation stage
+   */
+  it('should preserve history data weight distribution logic', () => {
+    // Arrange: 7-day scenario with mock history data, no peak dates
+    const targetSales = 100000;
+    const days = 7;
+    const calcStartDate = dayjs('2024-01-01');
+
+    // Mock history data with varying sales volumes
+    const historyData = [
+      { data_date: '2024-01-01', sales_volume: 10000 },
+      { data_date: '2024-01-02', sales_volume: 12000 },
+      { data_date: '2024-01-03', sales_volume: 15000 },
+      { data_date: '2024-01-04', sales_volume: 18000 }, // Peak in history
+      { data_date: '2024-01-05', sales_volume: 14000 },
+      { data_date: '2024-01-06', sales_volume: 11000 },
+      { data_date: '2024-01-07', sales_volume: 9000 }
+    ];
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72
+    };
+
+    // Calculate with history data, no peak dates
+    const result = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [], // No peak dates
+      calcStartDate,
+      params,
+      undefined,
+      undefined,
+      1,
+      historyData // Use history data
+    );
+
+    // Assert: Staff distribution should follow history data pattern
+    const dailyResults = result.daily_results;
+
+    // Day 4 (index 3) should have the highest staff due to highest historical sales
+    const staffValues = dailyResults.map(d => d.staff);
+    const maxStaffIndex = staffValues.indexOf(Math.max(...staffValues));
+
+    expect(maxStaffIndex).toBe(3); // Day 4 should have max staff
+
+    // Verify all days are non-peak
+    dailyResults.forEach(day => {
+      expect(day.isPeakDay).toBe(false);
+    });
+
+    console.log('=== Preservation Test 4: History Data ===');
+    dailyResults.forEach((day, i) => {
+      console.log(`Day ${i + 1}: staff=${day.staff}, historySales=${historyData[i].sales_volume}`);
+    });
+    console.log(`Peak staff is on day ${maxStaffIndex + 1} (expected: day 4)`);
+    console.log('=========================================');
+  });
+
+  /**
+   * Test 5: Event dates should affect traffic distribution curve independently
+   *
+   * **Validates: Requirement 3.8**
+   * - WHEN event dates (Gaussian distribution) are set without peak dates
+   * - THEN event dates should affect traffic distribution curve (Gaussian weights)
+   * - This is independent of peak date staff multiplier logic
+   */
+  it('should preserve event dates Gaussian distribution logic', () => {
+    // Arrange: 14-day scenario with event date on day 7, no peak dates
+    const targetSales = 200000;
+    const days = 14;
+    const calcStartDate = dayjs('2024-01-01');
+    const eventDate = calcStartDate.add(6, 'day'); // Day 7 as event center
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2, // Presale peaks 2 days BEFORE event
+      midsale_time_offset: 0, // Midsale peaks ON event day
+      aftersale_time_offset: 3, // Aftersale peaks 3 days AFTER event
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72
+    };
+
+    // Calculate with event date (Gaussian distribution), no peak dates
+    const result = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      'S级大促', // Event type to trigger non-uniform distribution
+      [eventDate], // Event date for Gaussian curve
+      calcStartDate,
+      params,
+      2.8, // Promotion factor
+      undefined,
+      1,
+      undefined
+    );
+
+    const dailyResults = result.daily_results;
+
+    // Assert: Verify Gaussian distribution pattern
+    // Due to different phase offsets, we should see:
+    // - Presale volume peaks around day 5 (2 days before event)
+    // - Midsale volume peaks around day 7 (on event day)
+    // - Aftersale volume peaks around day 10 (3 days after event)
+
+    // All days should be marked as isPeakDay = false (using eventDates, not peakDates)
+    dailyResults.forEach(day => {
+      expect(day.isPeakDay).toBe(false);
+    });
+
+    // Find peaks for each phase
+    const presalePeakDay = dailyResults.reduce((prev, curr) =>
+      curr.presale > prev.presale ? curr : prev
+    );
+    const midsalePeakDay = dailyResults.reduce((prev, curr) =>
+      curr.midsale > prev.midsale ? curr : prev
+    );
+    const aftersalePeakDay = dailyResults.reduce((prev, curr) =>
+      curr.aftersale > prev.aftersale ? curr : prev
+    );
+
+    console.log('=== Preservation Test 5: Event Dates (Gaussian) ===');
+    console.log(`Event date: ${eventDate.format('YYYY-MM-DD')} (day 7)`);
+    console.log(`Presale peaks on: ${presalePeakDay.fullDate} (expected ~day 5)`);
+    console.log(`Midsale peaks on: ${midsalePeakDay.fullDate} (expected ~day 7)`);
+    console.log(`Aftersale peaks on: ${aftersalePeakDay.fullDate} (expected ~day 10)`);
+    console.log('===================================================');
+
+    // Verify Gaussian distribution creates variation
+    const staffValues = dailyResults.map(d => d.staff);
+    const maxStaff = Math.max(...staffValues);
+    const minStaff = Math.min(...staffValues);
+    const variation = (maxStaff - minStaff) / minStaff;
+
+    // With Gaussian distribution, we expect significant variation (>50%)
+    expect(variation).toBeGreaterThan(0.5);
+  });
+
+  /**
+   * Test 6: 24-hour distribution calculation should remain unchanged
+   *
+   * **Validates: Requirement 3.5**
+   * - WHEN system calculates 24-hour distribution
+   * - THEN calculation should be based on peak day (peakDay) manpower requirements
+   * - Existing logic for hourly distribution should remain unchanged
+   */
+  it('should preserve 24-hour distribution calculation logic', () => {
+    // Arrange: 7-day scenario, no peak dates
+    const targetSales = 100000;
+    const days = 7;
+    const calcStartDate = dayjs('2024-01-01');
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72,
+      // Burst parameters for 24-hour distribution
+      presale_burst_start: 10,
+      presale_burst_end: 12,
+      presale_burst_factor: 1.9,
+      midsale_burst_start: 15,
+      midsale_burst_end: 17,
+      midsale_burst_factor: 2.3,
+      aftersale_burst_start: 20,
+      aftersale_burst_end: 22,
+      aftersale_burst_factor: 2.6
+    };
+
+    // Calculate without peak dates
+    const result = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [],
+      calcStartDate,
+      params,
+      undefined,
+      undefined,
+      1,
+      undefined
+    );
+
+    // Assert: Verify 24-hour distribution exists and follows expected pattern
+    expect(result.hourly_presale).toHaveLength(24);
+    expect(result.hourly_midsale).toHaveLength(24);
+    expect(result.hourly_aftersale).toHaveLength(24);
+    expect(result.hourly_total).toHaveLength(24);
+
+    // Verify burst periods create peaks in hourly distribution
+    const presaleBurstHours = result.hourly_presale.slice(10, 12);
+    const presaleNormalHours = result.hourly_presale.slice(5, 7);
+    const presaleBurstAvg = presaleBurstHours.reduce((a, b) => a + b, 0) / presaleBurstHours.length;
+    const presaleNormalAvg = presaleNormalHours.reduce((a, b) => a + b, 0) / presaleNormalHours.length;
+
+    // Burst hours should have higher values (burst factor = 1.9x)
+    expect(presaleBurstAvg).toBeGreaterThan(presaleNormalAvg * 1.5);
+
+    console.log('=== Preservation Test 6: 24-Hour Distribution ===');
+    console.log(`Hourly arrays length: ${result.hourly_total.length}`);
+    console.log(`Presale burst avg (10-12h): ${presaleBurstAvg.toFixed(2)}`);
+    console.log(`Presale normal avg (5-7h): ${presaleNormalAvg.toFixed(2)}`);
+    console.log(`Burst multiplier: ${(presaleBurstAvg / presaleNormalAvg).toFixed(2)}x`);
+    console.log('=================================================');
+  });
+
+  /**
+   * Test 7: Sensitivity analysis should remain unchanged
+   *
+   * **Validates: Requirement 3.7**
+   * - WHEN system performs sensitivity analysis
+   * - THEN customer order value and conversion rate impact calculations should remain unchanged
+   * - Peak date logic should not affect sensitivity analysis
+   */
+  it('should preserve sensitivity analysis calculation logic', () => {
+    // Arrange: 7-day scenario, no peak dates
+    const targetSales = 100000;
+    const days = 7;
+    const calcStartDate = dayjs('2024-01-01');
+
+    const params: CalcParams = {
+      avg_order_value: 160,
+      daily_visitors: 1000,
+      peak_factor: 1.2,
+      safety_buffer: 1.15,
+      visitor_to_presale: 0.25,
+      consult_to_order: 0.6,
+      order_to_payment: 0.9,
+      midsale_ratio: 0.35,
+      payment_to_aftersale: 0.15,
+      presale_time_offset: 2,
+      midsale_time_offset: 0,
+      aftersale_time_offset: 3,
+      presale_handle_time: 4.5,
+      presale_saturation: 0.78,
+      midsale_handle_time: 3.0,
+      midsale_saturation: 0.82,
+      aftersale_handle_time: 6.5,
+      aftersale_saturation: 0.72
+    };
+
+    // Calculate without peak dates
+    const result = ManpowerCalculator.calculateWithShifts(
+      targetSales,
+      days,
+      null,
+      [],
+      calcStartDate,
+      params,
+      undefined,
+      undefined,
+      1,
+      undefined
+    );
+
+    // Assert: Verify sensitivity analysis exists and has reasonable values
+    expect(result.sensitivity).toBeDefined();
+    expect(result.sensitivity.avg_order_value).toBeDefined();
+    expect(result.sensitivity.conversion_rate).toBeDefined();
+
+    // Sensitivity values should be non-zero (some impact on staff)
+    // avg_order_value: decreasing 10% should reduce staff (negative value)
+    // conversion_rate: increasing 10% should increase staff (positive value)
+
+    const ovSensitivity = result.sensitivity.avg_order_value;
+    const crSensitivity = result.sensitivity.conversion_rate;
+
+    // Note: Due to visitor baseline, sensitivity might not always follow expected signs
+    // But they should be defined numbers
+    expect(typeof ovSensitivity).toBe('number');
+    expect(typeof crSensitivity).toBe('number');
+
+    console.log('=== Preservation Test 7: Sensitivity Analysis ===');
+    console.log(`Needed staff (baseline): ${result.needed_staff}`);
+    console.log(`Avg order value sensitivity (-10%): ${ovSensitivity} staff`);
+    console.log(`Conversion rate sensitivity (+10%): ${crSensitivity} staff`);
+    console.log('=================================================');
+  });
+});

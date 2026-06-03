@@ -127,19 +127,49 @@ class ManpowerCalculator {
    * 核心计算方法：全过程人力仿真算法
    * 采用双径流量推演与柔性人力模型
    */
-  static calculateWithShifts(targetSales, days = 30, eventType = null, eventDates = [dayjs()], calcStartDate = null, params, promotionFactor, targetVisitors, minStaff = 1) {
-    const isDaily = eventType === null || eventType.includes("日常");
+  /**
+   * 从历史数据中提取顺序趋势权重（忽略真实日期，按记录顺序排列）
+   */
+  static getHistoryTrendWeights(historyData, days) {
+    if (!historyData || historyData.length === 0) return null;
+    const values = historyData.map((d) => Math.max(Number(d.sales_volume) || 0, 0));
+    const totalValue = values.reduce((a, b) => a + b, 0);
+    if (totalValue === 0) return null;
+    const normalized = values.map((v) => v / totalValue);
+    if (normalized.length >= days) {
+      const sliced = normalized.slice(0, days);
+      const slicedTotal = sliced.reduce((a, b) => a + b, 0);
+      return slicedTotal === 0 ? null : sliced.map((w) => w / slicedTotal);
+    } else {
+      const histLen = normalized.length;
+      const remaining = days - histLen;
+      const histTotal = normalized.reduce((a, b) => a + b, 0);
+      const histShare = 0.7;
+      const evenShare = 0.3 / remaining;
+      const weights = [
+        ...normalized.map((w) => w / histTotal * histShare),
+        ...new Array(remaining).fill(evenShare)
+      ];
+      return weights;
+    }
+  }
+  static calculateWithShifts(targetSales, days = 30, eventType = null, eventDates = [dayjs()], calcStartDate = null, params, promotionFactor, targetVisitors, minStaff = 1, historyData, peakDates) {
+    const isDaily = (eventType === null || eventType.includes("日常")) && eventDates.length === 0;
     const startDate = calcStartDate || dayjs(Math.min(...eventDates.map((d) => d.valueOf()))).subtract(5, "day");
     const p = (k, d) => params[k] ?? d;
     const avgOv = p("avg_order_value", 160);
     const peakFactor = p("peak_factor", 1.2);
     const safetyBuffer = p("safety_buffer", 1.15);
+    p("peak_day_factor", 1.5);
     const baseDailyVisitors = targetVisitors ?? p("daily_visitors", 1e3);
     const vToPRate = p("visitor_to_presale", 0.25);
     const offsets = {
-      presale: p("presale_time_offset", -2),
+      presale: -p("presale_time_offset", 2),
+      // 正数 → 活动日前几天
       midsale: p("midsale_time_offset", 0),
+      // 正数 → 活动日后几天
       aftersale: p("aftersale_time_offset", 3)
+      // 正数 → 活动日后几天
     };
     const conversion = {
       c_to_o: p("consult_to_order", 0.6),
@@ -168,18 +198,28 @@ class ManpowerCalculator {
     const totalPresale = Math.max(presaleFromSales, visitorPresaleBaseline);
     const totalMidsale = totalPresale * conversion.m_ratio;
     const totalAftersale = totalPresale * conversion.c_to_o * conversion.o_to_p * conversion.p_to_a;
-    const numPeaks = eventDates.length;
-    let wPre = new Array(days).fill(0);
-    let wMid = new Array(days).fill(0);
-    let wAft = new Array(days).fill(0);
-    for (const ed of eventDates) {
-      const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
-      const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
-      const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
-      for (let i = 0; i < days; i++) {
-        wPre[i] += wp[i] / numPeaks;
-        wMid[i] += wm[i] / numPeaks;
-        wAft[i] += wa[i] / numPeaks;
+    let wPre;
+    let wMid;
+    let wAft;
+    const histWeights = this.getHistoryTrendWeights(historyData || [], days);
+    if (histWeights) {
+      wPre = histWeights;
+      wMid = histWeights;
+      wAft = histWeights;
+    } else {
+      const numPeaks = eventDates.length;
+      wPre = new Array(days).fill(0);
+      wMid = new Array(days).fill(0);
+      wAft = new Array(days).fill(0);
+      for (const ed of eventDates) {
+        const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
+        const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
+        const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
+        for (let i = 0; i < days; i++) {
+          wPre[i] += wp[i] / numPeaks;
+          wMid[i] += wm[i] / numPeaks;
+          wAft[i] += wa[i] / numPeaks;
+        }
       }
     }
     const dailyResults = [];
@@ -195,8 +235,12 @@ class ManpowerCalculator {
       const rawP = getRawDemand(vP, "presale");
       const rawM = getRawDemand(vM, "midsale");
       const rawA = getRawDemand(vA, "aftersale");
+      const currentDateStr = startDate.add(i, "day").format("YYYY-MM-DD");
+      const isPeakDay = eventDates.some((ed) => ed.format("YYYY-MM-DD") === currentDateStr);
       dailyResults.push({
         date: startDate.add(i, "day").format("MM-DD"),
+        fullDate: currentDateStr,
+        isPeakDay,
         staff: Math.ceil(rawP + rawM + rawA),
         presale: Math.ceil(rawP),
         midsale: Math.ceil(rawM),
@@ -380,9 +424,50 @@ class DBManager {
       )
     `);
     this._db.exec(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dept_name TEXT NOT NULL,
+        description TEXT,
+        parent_id INTEGER,
+        status INTEGER DEFAULT 1,
+        create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    this._db.exec(`
+      CREATE TABLE IF NOT EXISTS personnel (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        staff_id TEXT UNIQUE,
+        dept_id INTEGER,
+        position TEXT,
+        phone TEXT,
+        status INTEGER DEFAULT 1,
+        create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (dept_id) REFERENCES departments(id) ON DELETE SET NULL
+      )
+    `);
+    this._db.exec(`
+      CREATE TABLE IF NOT EXISTS shift_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        personnel_id INTEGER NOT NULL,
+        shift_id INTEGER NOT NULL,
+        assignment_date TEXT NOT NULL,
+        remark TEXT,
+        create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (personnel_id) REFERENCES personnel(id) ON DELETE CASCADE,
+        FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE
+      )
+    `);
+    this._db.exec(`
       CREATE INDEX IF NOT EXISTS idx_project_id ON history_biz_data(project_id);
       CREATE INDEX IF NOT EXISTS idx_data_date ON history_biz_data(data_date);
       CREATE INDEX IF NOT EXISTS idx_project_active ON history_projects(is_active);
+      CREATE INDEX IF NOT EXISTS idx_dept_parent ON departments(parent_id);
+      CREATE INDEX IF NOT EXISTS idx_personnel_dept ON personnel(dept_id);
+      CREATE INDEX IF NOT EXISTS idx_assignment_date ON shift_assignments(assignment_date);
+      CREATE INDEX IF NOT EXISTS idx_assignment_personnel ON shift_assignments(personnel_id);
     `);
     try {
       const tableInfo = this._db.prepare("PRAGMA table_info(history_biz_data)").all();
@@ -517,6 +602,84 @@ ipcMain.handle("update:shift", async (_event, data) => {
     [data.name, data.type, data.start, data.end, data.hours, data.rest, data.id]
   );
 });
+ipcMain.handle("get:departments", async (_event) => {
+  return dbManager.query("SELECT * FROM departments WHERE status = 1", []);
+});
+ipcMain.handle("add:department", async (_event, data) => {
+  return dbManager.execute(
+    "INSERT INTO departments (dept_name, description, parent_id) VALUES (?, ?, ?)",
+    [data.name, data.description, data.parentId || null]
+  );
+});
+ipcMain.handle("update:department", async (_event, data) => {
+  return dbManager.execute(
+    "UPDATE departments SET dept_name = ?, description = ?, parent_id = ?, update_time = CURRENT_TIMESTAMP WHERE id = ?",
+    [data.name, data.description, data.parentId || null, data.id]
+  );
+});
+ipcMain.handle("delete:department", async (_event, id) => {
+  return dbManager.execute("UPDATE departments SET status = 0 WHERE id = ?", [id]);
+});
+ipcMain.handle("get:personnel", async (_event, deptId) => {
+  if (deptId) {
+    return dbManager.query(
+      "SELECT p.*, d.dept_name FROM personnel p LEFT JOIN departments d ON p.dept_id = d.id WHERE p.status = 1 AND p.dept_id = ?",
+      [deptId]
+    );
+  }
+  return dbManager.query(
+    "SELECT p.*, d.dept_name FROM personnel p LEFT JOIN departments d ON p.dept_id = d.id WHERE p.status = 1",
+    []
+  );
+});
+ipcMain.handle("add:personnel", async (_event, data) => {
+  return dbManager.execute(
+    "INSERT INTO personnel (name, staff_id, dept_id, position, phone) VALUES (?, ?, ?, ?, ?)",
+    [data.name, data.staffId, data.deptId, data.position, data.phone]
+  );
+});
+ipcMain.handle("update:personnel", async (_event, data) => {
+  return dbManager.execute(
+    "UPDATE personnel SET name = ?, staff_id = ?, dept_id = ?, position = ?, phone = ?, update_time = CURRENT_TIMESTAMP WHERE id = ?",
+    [data.name, data.staffId, data.deptId, data.position, data.phone, data.id]
+  );
+});
+ipcMain.handle("delete:personnel", async (_event, id) => {
+  return dbManager.execute("UPDATE personnel SET status = 0 WHERE id = ?", [id]);
+});
+ipcMain.handle("get:assignments", async (_event, startDate, endDate) => {
+  return dbManager.query(
+    `SELECT a.*, p.name as personnel_name, s.shift_name, s.start_time, s.end_time
+     FROM shift_assignments a
+     JOIN personnel p ON a.personnel_id = p.id
+     JOIN shifts s ON a.shift_id = s.id
+     WHERE a.assignment_date BETWEEN ? AND ?`,
+    [startDate, endDate]
+  );
+});
+ipcMain.handle("add:assignment", async (_event, data) => {
+  return dbManager.execute(
+    "INSERT INTO shift_assignments (personnel_id, shift_id, assignment_date, remark) VALUES (?, ?, ?, ?)",
+    [data.personnelId, data.shiftId, data.date, data.remark]
+  );
+});
+ipcMain.handle("delete:assignment", async (_event, id) => {
+  return dbManager.execute("DELETE FROM shift_assignments WHERE id = ?", [id]);
+});
+ipcMain.handle("batch:assignments", async (_event, assignments) => {
+  const deleteStmt = dbManager.db.prepare("DELETE FROM shift_assignments WHERE personnel_id = ? AND assignment_date = ?");
+  const insertStmt = dbManager.db.prepare("INSERT INTO shift_assignments (personnel_id, shift_id, assignment_date, remark) VALUES (?, ?, ?, ?)");
+  const transaction = dbManager.db.transaction((data) => {
+    for (const item of data) {
+      deleteStmt.run(item.personnelId, item.date);
+      if (item.shiftId) {
+        insertStmt.run(item.personnelId, item.shiftId, item.date, item.remark || "");
+      }
+    }
+  });
+  transaction(assignments);
+  return { success: true, count: assignments.length };
+});
 ipcMain.handle("get:historyProjects", async (_event) => {
   return dbManager.query("SELECT * FROM history_projects WHERE is_active = 1 ORDER BY update_time DESC", []);
 });
@@ -566,9 +729,17 @@ ipcMain.handle("batch:historyData", async (_event, projectId, records) => {
 });
 ipcMain.handle("calc:manpower", async (_event, data) => {
   try {
-    const { targetSales, days, eventType, eventDates, calcStartDate, params, promotionFactor } = data;
+    const { targetSales, days, eventType, eventDates, peakDates, calcStartDate, params, promotionFactor, historyProjectId, targetVisitors, minStaff } = data;
     const parsedEventDates = (eventDates || []).map((d) => dayjs(d));
+    const parsedPeakDates = (peakDates || []).map((d) => dayjs(d));
     const parsedCalcStartDate = calcStartDate ? dayjs(calcStartDate) : null;
+    let historyData = void 0;
+    if (historyProjectId) {
+      historyData = await dbManager.query(
+        "SELECT * FROM history_biz_data WHERE project_id = ? ORDER BY data_date ASC",
+        [historyProjectId]
+      );
+    }
     return ManpowerCalculator.calculateWithShifts(
       targetSales || 0,
       days || 7,
@@ -576,8 +747,16 @@ ipcMain.handle("calc:manpower", async (_event, data) => {
       parsedEventDates,
       parsedCalcStartDate,
       params || {},
-      promotionFactor
+      promotionFactor,
       // 活动精确系数
+      targetVisitors,
+      // 访客数驱动模式下的目标日均访客数
+      minStaff || 1,
+      // 班次最低保底人数
+      historyData,
+      // 历史数据
+      parsedPeakDates
+      // 高峰日期
     );
   } catch (error) {
     console.error("calc:manpower error:", error);

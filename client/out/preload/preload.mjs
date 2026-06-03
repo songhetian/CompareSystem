@@ -110,6 +110,21 @@ const api = {
   setDefaultScheme: (id) => ipcRenderer.invoke("set-default:scheme", id),
   getHistory: () => ipcRenderer.invoke("get:history"),
   deleteHistory: (id) => ipcRenderer.invoke("delete:history", id),
+  // 部门管理
+  getDepartments: () => ipcRenderer.invoke("get:departments"),
+  addDepartment: (data) => ipcRenderer.invoke("add:department", data),
+  updateDepartment: (data) => ipcRenderer.invoke("update:department", data),
+  deleteDepartment: (id) => ipcRenderer.invoke("delete:department", id),
+  // 人员管理
+  getPersonnel: (deptId) => ipcRenderer.invoke("get:personnel", deptId),
+  addPersonnel: (data) => ipcRenderer.invoke("add:personnel", data),
+  updatePersonnel: (data) => ipcRenderer.invoke("update:personnel", data),
+  deletePersonnel: (id) => ipcRenderer.invoke("delete:personnel", id),
+  // 排班管理
+  getAssignments: (startDate, endDate) => ipcRenderer.invoke("get:assignments", startDate, endDate),
+  addAssignment: (data) => ipcRenderer.invoke("add:assignment", data),
+  deleteAssignment: (id) => ipcRenderer.invoke("delete:assignment", id),
+  batchAssignments: (assignments) => ipcRenderer.invoke("batch:assignments", assignments),
   // 历史项目管理
   getHistoryProjects: () => ipcRenderer.invoke("get:historyProjects"),
   addHistoryProject: (data) => ipcRenderer.invoke("add:historyProject", data),

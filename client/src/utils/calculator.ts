@@ -45,6 +45,9 @@ export interface CalcParams {
   event_s?: number;
   event_a?: number;
 
+  // 高峰日系数
+  peak_day_factor?: number;
+
   [key: string]: number | undefined;
 }
 
@@ -57,6 +60,7 @@ export interface CalcConfig {
   days: number;
   eventType: string | null;
   eventDates: dayjs.Dayjs[];
+  peakDates?: dayjs.Dayjs[]; // 高峰日期，用于影响人员倍数
   calcStartDate: dayjs.Dayjs | null;
   params: CalcParams;
   promotionFactor?: number; // 活动规划中设置的精确系数
@@ -108,6 +112,44 @@ export class ManpowerCalculator {
    * 核心计算方法：全过程人力仿真算法
    * 采用双径流量推演与柔性人力模型
    */
+  /**
+   * 从历史数据中提取顺序趋势权重（忽略真实日期，按记录顺序排列）
+   */
+  private static getHistoryTrendWeights(historyData: any[], days: number): number[] | null {
+    if (!historyData || historyData.length === 0) return null;
+
+    // 取 sales_volume 作为权重基础，按已有顺序（调用方保证了 ORDER BY data_date ASC）
+    const values = historyData.map(d => Math.max(Number(d.sales_volume) || 0, 0));
+    const totalValue = values.reduce((a, b) => a + b, 0);
+    if (totalValue === 0) return null;
+
+    // 归一化为权重
+    const normalized = values.map(v => v / totalValue);
+
+    // 对齐到目标天数
+    if (normalized.length >= days) {
+      // 历史数据足够多：截取前 days 天，重新归一化
+      const sliced = normalized.slice(0, days);
+      const slicedTotal = sliced.reduce((a, b) => a + b, 0);
+      return slicedTotal === 0 ? null : sliced.map(w => w / slicedTotal);
+    } else {
+      // 历史数据不足：有历史的天用历史权重，剩余天均匀分摊
+      const histLen = normalized.length;
+      const remaining = days - histLen;
+      const histTotal = normalized.reduce((a, b) => a + b, 0);
+
+      // 历史部分占 70%，剩余部分占 30%（均匀）
+      const histShare = 0.7;
+      const evenShare = 0.3 / remaining;
+
+      const weights: number[] = [
+        ...normalized.map(w => (w / histTotal) * histShare),
+        ...new Array(remaining).fill(evenShare)
+      ];
+      return weights;
+    }
+  }
+
   public static calculateWithShifts(
     targetSales: number,
     days: number = 30,
@@ -117,10 +159,12 @@ export class ManpowerCalculator {
     params: CalcParams,
     promotionFactor?: number, // 活动规划中设置的精确系数
     targetVisitors?: number,  // 访客数驱动模式下的目标日均访客数
-    minStaff: number = 1      // 班次最低保底人数
+    minStaff: number = 1,     // 班次最低保底人数
+    historyData?: any[],      // 历史业务数据（按日期正序），用于替代数学模型权重
+    peakDates: dayjs.Dayjs[] = [] // 高峰日期（独立于eventDates），用于人力加成计算
   ) {
-    // 判断是否为日常模式
-    const isDaily = eventType === null || eventType.includes('日常');
+    // 判断是否为日常模式：没有活动类型且没有高峰日期才均匀分布
+    const isDaily = (eventType === null || eventType.includes('日常')) && eventDates.length === 0;
 
     // 计算开始日期：默认为最早的事件日期前5天
     const startDate = calcStartDate || dayjs(Math.min(...eventDates.map(d => d.valueOf()))).subtract(5, 'day');
@@ -132,15 +176,17 @@ export class ManpowerCalculator {
     const avgOv = p('avg_order_value', 160.0);
     const peakFactor = p('peak_factor', 1.2);
     const safetyBuffer = p('safety_buffer', 1.15);
+    const peakDayFactor = p('peak_day_factor', 1.5);
     // 如果是访客数驱动模式且传入了目标访客数，则覆盖参数中的基准日访客数
     const baseDailyVisitors = targetVisitors ?? p('daily_visitors', 1000.0);
     const vToPRate = p('visitor_to_presale', 0.25);
 
     // 2. 时间偏移参数
+    // presale_time_offset 存储为正数（提前天数），计算时取负，表示活动日前 N 天为售前峰值
     const offsets = {
-      presale: p('presale_time_offset', -2.0),
-      midsale: p('midsale_time_offset', 0.0),
-      aftersale: p('aftersale_time_offset', 3.0)
+      presale:  -p('presale_time_offset', 2.0),  // 正数 → 活动日前几天
+      midsale:   p('midsale_time_offset', 0.0),  // 正数 → 活动日后几天
+      aftersale: p('aftersale_time_offset', 3.0) // 正数 → 活动日后几天
     };
 
     // 3. 转化漏斗参数
@@ -187,25 +233,40 @@ export class ManpowerCalculator {
     const totalMidsale = totalPresale * conversion.m_ratio;
     const totalAftersale = (totalPresale * conversion.c_to_o * conversion.o_to_p) * conversion.p_to_a;
 
-    // 7. 多峰叠加权重分布
-    const numPeaks = eventDates.length;
-    let wPre = new Array(days).fill(0.0);
-    let wMid = new Array(days).fill(0.0);
-    let wAft = new Array(days).fill(0.0);
+    // 7. 权重分布（优先使用历史数据趋势，否则使用多峰高斯模型）
+    let wPre: number[];
+    let wMid: number[];
+    let wAft: number[];
 
-    for (const ed of eventDates) {
-      const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
-      const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
-      const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
-      for (let i = 0; i < days; i++) {
-        wPre[i] += wp[i] / numPeaks;
-        wMid[i] += wm[i] / numPeaks;
-        wAft[i] += wa[i] / numPeaks;
+    const histWeights = this.getHistoryTrendWeights(historyData || [], days);
+
+    if (histWeights) {
+      // 使用历史数据的销售额比例直接作为三个阶段的权重
+      // 三个阶段共享同一个历史趋势曲线，只是总量比例不同（由 totalPresale/Mid/Aft 体现）
+      wPre = histWeights;
+      wMid = histWeights;
+      wAft = histWeights;
+    } else {
+      // 无历史数据：回退到高斯分布数学模型
+      const numPeaks = eventDates.length;
+      wPre = new Array(days).fill(0.0);
+      wMid = new Array(days).fill(0.0);
+      wAft = new Array(days).fill(0.0);
+
+      for (const ed of eventDates) {
+        const wp = this.getDailyWeights(days, ed, startDate, offsets.presale, 3, isDaily);
+        const wm = this.getDailyWeights(days, ed, startDate, offsets.midsale, 3, isDaily);
+        const wa = this.getDailyWeights(days, ed, startDate, offsets.aftersale, 3, isDaily);
+        for (let i = 0; i < days; i++) {
+          wPre[i] += wp[i] / numPeaks;
+          wMid[i] += wm[i] / numPeaks;
+          wAft[i] += wa[i] / numPeaks;
+        }
       }
     }
 
     // 8. 每日人力需求计算
-    const dailyResults: Array<{ date: string; staff: number; presale: number; midsale: number; aftersale: number; vol_pre: number; vol_mid: number; vol_after: number }> = [];
+    const dailyResults: Array<{ date: string; fullDate: string; isPeakDay: boolean; staff: number; presale: number; midsale: number; aftersale: number; vol_pre: number; vol_mid: number; vol_after: number }> = [];
     for (let i = 0; i < days; i++) {
       const vP = totalPresale * wPre[i];
       const vM = totalMidsale * wMid[i];
@@ -229,13 +290,25 @@ export class ManpowerCalculator {
       const rawM = getRawDemand(vM, 'midsale');
       const rawA = getRawDemand(vA, 'aftersale');
 
+      // 判断当天是否是高峰日（使用peakDates而非eventDates）
+      const currentDateStr = startDate.add(i, 'day').format('YYYY-MM-DD');
+      const isPeakDay = peakDates.some(pd => pd.format('YYYY-MM-DD') === currentDateStr);
+
+      // 应用高峰日系数
+      const peakMultiplier = isPeakDay ? peakDayFactor : 1.0;
+      const adjustedRawP = rawP * peakMultiplier;
+      const adjustedRawM = rawM * peakMultiplier;
+      const adjustedRawA = rawA * peakMultiplier;
+
       // 先求和再取整（全能客服模型）
       dailyResults.push({
         date: startDate.add(i, 'day').format('MM-DD'),
-        staff: Math.ceil(rawP + rawM + rawA),
-        presale: Math.ceil(rawP),
-        midsale: Math.ceil(rawM),
-        aftersale: Math.ceil(rawA),
+        fullDate: currentDateStr,
+        isPeakDay,
+        staff: Math.ceil(adjustedRawP + adjustedRawM + adjustedRawA),
+        presale: Math.ceil(adjustedRawP),
+        midsale: Math.ceil(adjustedRawM),
+        aftersale: Math.ceil(adjustedRawA),
         vol_pre: vP,
         vol_mid: vM,
         vol_after: vA
