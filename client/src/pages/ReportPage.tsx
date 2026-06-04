@@ -2,7 +2,10 @@ import {
   Typography, Card, Space, Message, Modal, Button, Tag, Descriptions, Statistic, Table, Grid, Pagination, Divider, Avatar, Empty
 } from '@arco-design/web-react';
 import { useState, useEffect, useMemo } from 'react';
-import { IconDelete, IconRefresh, IconEye, IconHistory, IconCalendar, IconDownload, IconFire, IconStorage } from '@arco-design/web-react/icon';
+import { 
+  IconDelete, IconRefresh, IconEye, IconHistory, IconCalendar, IconDownload, IconFire, 
+  IconStorage, IconFile, IconArrowRise, IconClockCircle, IconPushpin 
+} from '@arco-design/web-react/icon';
 import { InlineLoading } from '../components/LoadingScreen';
 import { PageHeader, StatsCard } from '../components/common';
 import ExcelJS from 'exceljs';
@@ -91,7 +94,7 @@ export const ReportPage = () => {
 
   return (
     <div className='page-container' style={{ maxWidth: 1100, margin: '0 auto', width: '100%', padding: '20px' }}>
-      <PageHeader title='精算分析报告' subtitle='历史方案归档与对比分析' icon='📊' extra={<Button icon={<IconRefresh />} onClick={loadHistory}>刷新</Button>} />
+      <PageHeader title='精算分析报告' subtitle='历史方案归档与对比分析' icon={<IconFile />} extra={<Button icon={<IconRefresh />} onClick={loadHistory}>刷新</Button>} />
 
       {history.length === 0 ? (
         <Card bordered={false} style={{ textAlign: 'center', padding: '80px 0' }}>
@@ -100,9 +103,9 @@ export const ReportPage = () => {
       ) : (
         <div style={{ marginTop: 24 }}>
           <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={8}><StatsCard title="累计报告" value={history.length} suffix="份" icon='📝' /></Col>
-            <Col span={8}><StatsCard title="本月测算" value={history.filter(h => dayjs(h.create_time).isSame(dayjs(), 'month')).length} suffix="份" icon='📈' /></Col>
-            <Col span={8}><StatsCard title="最近执行" value={dayjs(history[0]?.create_time).format('MM-DD')} icon='⏰' /></Col>
+            <Col span={8}><StatsCard title="累计报告" value={history.length} suffix="份" icon={<IconFile />} /></Col>
+            <Col span={8}><StatsCard title="本月测算" value={history.filter(h => dayjs(h.create_time).isSame(dayjs(), 'month')).length} suffix="份" icon={<IconArrowRise />} /></Col>
+            <Col span={8}><StatsCard title="最近执行" value={dayjs(history[0]?.create_time).format('MM-DD')} icon={<IconClockCircle />} /></Col>
           </Row>
 
           <div style={{ position: 'relative', paddingLeft: 30 }}>
@@ -156,7 +159,7 @@ export const ReportPage = () => {
           return (
             <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               <Space direction="vertical" size={24} style={{ width: '100%' }}>
-                <Descriptions title="📌 测算目标" column={3} border size="small" data={[{ label: '目标值', value: res.target_sales > 0 ? `¥${(res.target_sales/10000).toFixed(0)}w` : `${res.target_visitors}人` }, { label: '天数', value: `${res.days}天` }, { label: '建议编制', value: res.needed_staff + '人' }]} />
+                <Descriptions title={<Space><IconPushpin /> 测算目标</Space>} column={3} border size="small" data={[{ label: '目标值', value: res.target_sales > 0 ? `¥${(res.target_sales/10000).toFixed(0)}w` : `${res.target_visitors}人` }, { label: '天数', value: `${res.days}天` }, { label: '建议编制', value: res.needed_staff + '人' }]} />
                 <Card title="每日人力明细" bordered={false} style={{ background: 'var(--color-fill-1)', borderRadius: 12 }}>
                   <Table 
                     size="mini" 

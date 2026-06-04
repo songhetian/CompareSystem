@@ -236,7 +236,7 @@ export const ShiftPage = () => {
                   }}
                   title={
                     <Space>
-                      <span style={{ fontSize: 24 }}>{emojis[shift.shift_type] || '⏰'}</span>
+                      <span><IconClockCircle /></span>
                       <span>{shift.shift_name}</span>
                       <Tag color='blue'>{shift.shift_type}</Tag>
                     </Space>

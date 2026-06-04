@@ -5,8 +5,8 @@ import { useState, useEffect } from 'react';
 import {
   Table, Card, Space, Button, Input, Modal, Form, Message, Popconfirm, Select, Tag, Typography
 } from '@arco-design/web-react';
-import { IconPlus, IconEdit, IconDelete, IconRefresh, IconUpload } from '@arco-design/web-react/icon';
-import { PageHeader, StatsCard } from '../components/common';
+import { IconPlus, IconEdit, IconDelete, IconRefresh, IconUpload, IconUserGroup } from '@arco-design/web-react/icon';
+import { PageHeader } from '../components/common';
 import ExcelJS from 'exceljs';
 
 const { Text } = Typography;
@@ -64,7 +64,7 @@ export const PersonnelPage = () => {
       departments.forEach(d => deptMap[d.dept_name] = d.id);
 
       worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // 跳过表头
+        if (rowNumber === 1) return;
         const name = row.getCell(1).text;
         const staffId = row.getCell(2).text;
         const deptName = row.getCell(3).text;
@@ -104,12 +104,10 @@ export const PersonnelPage = () => {
   const handleAdd = () => {
     setEditingId(null);
     form.resetFields();
-    // Auto-generate employee ID
     form.setFieldsValue({ staffId: `ST-${Date.now().toString().slice(-6)}` });
     setModalVisible(true);
   };
 
-  // 生成随机颜色工具
   const getAvatarColor = (name: string) => {
     const colors = ['#F53F3F', '#F77234', '#FF7D00', '#F7BA1E', '#00B42A', '#165DFF', '#3491FA', '#722ED1'];
     let hash = 0;
@@ -151,18 +149,14 @@ export const PersonnelPage = () => {
       }
       setModalVisible(false);
       fetchData();
-    } catch (err) {
-      // 验证失败不处理
-    }
+    } catch (err) {}
   };
 
   const filteredData = data.filter((item: any) => {
     const matchesSearch = item.name.toLowerCase().includes(searchText.toLowerCase()) ||
       (item.staff_id && item.staff_id.toLowerCase().includes(searchText.toLowerCase())) ||
       (item.position && item.position.toLowerCase().includes(searchText.toLowerCase()));
-    
     const matchesDept = selectedDept === 'all' || item.dept_id === selectedDept;
-    
     return matchesSearch && matchesDept;
   });
 
@@ -170,82 +164,39 @@ export const PersonnelPage = () => {
     {
       title: '姓名',
       dataIndex: 'name',
-      render: (val: string, record: any) => (
+      render: (val: string) => (
         <Space>
           <div style={{ 
-            width: 32, height: 32, borderRadius: '50%', 
+            width: 24, height: 24, borderRadius: '50%', 
             background: getAvatarColor(val), 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 14, fontWeight: 600
+            color: '#fff', fontSize: 11, fontWeight: 600
           }}>
             {val.charAt(0)}
           </div>
-          <Text bold style={{ fontSize: 14 }}>{val}</Text>
+          <Text bold style={{ fontSize: 13 }}>{val}</Text>
         </Space>
       )
     },
     {
       title: '工号',
       dataIndex: 'staff_id',
-      render: (val: string) => <Text style={{ fontFamily: 'monospace', color: 'var(--color-text-2)' }}>{val || '-'}</Text>
+      render: (val: string) => <Text style={{ fontFamily: 'monospace', fontSize: 12 }}>{val || '-'}</Text>
     },
     {
       title: '所属部门',
       dataIndex: 'dept_name',
-      render: (val: string) => (
-        <Tag 
-          color='arcoblue' 
-          style={{ 
-            borderRadius: 6, 
-            padding: '0 8px',
-            background: 'var(--color-primary-light-1)',
-            color: 'var(--color-primary-6)',
-            border: '1px solid var(--color-primary-light-2)'
-          }}
-        >
-          {val || '未分配'}
-        </Tag>
-      )
-    },
-    {
-      title: '职位',
-      dataIndex: 'position',
-      render: (val: string) => <Text type="secondary">{val || '-'}</Text>
-    },
-    {
-      title: '手机号',
-      dataIndex: 'phone',
-      render: (val: string) => <Text style={{ color: 'var(--color-text-3)' }}>{val || '-'}</Text>
+      render: (val: string) => <Tag size="small" color='arcoblue'>{val || '未分配'}</Tag>
     },
     {
       title: '操作',
-      width: 160,
+      width: 120,
       align: 'right' as const,
       render: (_: any, record: any) => (
         <Space>
-          <Button 
-            type="text" 
-            size="small"
-            icon={<IconEdit />} 
-            onClick={() => handleEdit(record)}
-            style={{ borderRadius: 6 }}
-          >
-            编辑
-          </Button>
-          <Popconfirm 
-            title="确定要删除该人员吗？" 
-            onOk={() => handleDelete(record.id)}
-            focusLock
-          >
-            <Button 
-              type="text" 
-              size="small"
-              status="danger" 
-              icon={<IconDelete />}
-              style={{ borderRadius: 6 }}
-            >
-              删除
-            </Button>
+          <Button type="text" size="small" icon={<IconEdit />} onClick={() => handleEdit(record)} />
+          <Popconfirm title="确定要删除该人员吗？" onOk={() => handleDelete(record.id)}>
+            <Button type="text" size="small" status="danger" icon={<IconDelete />} />
           </Popconfirm>
         </Space>
       )
@@ -253,119 +204,43 @@ export const PersonnelPage = () => {
   ];
 
   return (
-    <div className='page-container' style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div className='page-container' style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
       <PageHeader
         title='人力资源管理'
-        subtitle='全量员工档案管理，关联组织架构，为智能排班调度提供人力资源支撑'
-        icon='👥'
+        subtitle='全量员工档案管理，为排班调度提供支撑'
+        icon={<IconUserGroup />}
         extra={
           <Space size="medium">
-            <Button 
-              icon={<IconRefresh />} 
-              onClick={fetchData}
-              style={{ borderRadius: 8 }}
-            >
-              刷新
-            </Button>
+            <Button icon={<IconRefresh />} onClick={fetchData} size="small">刷新</Button>
             <label>
-              <input 
-                type="file" 
-                accept=".xlsx,.xls" 
-                style={{ display: 'none' }} 
-                onChange={handleImportExcel} 
-              />
-              <Button 
-                icon={<IconUpload />}
-                style={{ borderRadius: 8 }}
-              >
-                导入 Excel
-              </Button>
+              <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
+              <Button icon={<IconUpload />} size="small">导入 Excel</Button>
             </label>
-            <Button 
-              type='primary' 
-              icon={<IconPlus />} 
-              onClick={handleAdd}
-              style={{ borderRadius: 8, background: 'linear-gradient(135deg, #00B42A 0%, #23C343 100%)', border: 'none' }}
-            >
-              添加人员
-            </Button>
+            <Button type='primary' icon={<IconPlus />} onClick={handleAdd} size="small">添加人员</Button>
           </Space>
         }
       />
 
-      <Card 
-        bordered={false}
-        style={{ 
-          borderRadius: 12, 
-          boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
-          background: 'var(--color-bg-2)'
-        }}
-      >
-        <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Card bordered={false} style={{ borderRadius: 8 }}>
+        <div style={{ marginBottom: 16 }}>
           <Space size="medium">
-            <Input.Search
-              placeholder='搜索姓名、工号、职位...'
-              style={{ width: 320, borderRadius: 8 }}
-              value={searchText}
-              onChange={setSearchText}
-              onSearch={setSearchText}
-              allowClear
-            />
-            <Select
-              placeholder="按部门筛选"
-              style={{ width: 200, borderRadius: 8 }}
-              value={selectedDept}
-              onChange={setSelectedDept}
-            >
+            <Input.Search placeholder='搜索姓名、工号...' style={{ width: 240 }} value={searchText} size="small" onChange={(v) => setSearchText(v)} allowClear />
+            <Select placeholder="按部门筛选" style={{ width: 160 }} value={selectedDept} size="small" onChange={(v) => setSelectedDept(v)}>
               <Select.Option value="all">全部部门</Select.Option>
-              {departments.map((d: any) => (
-                <Select.Option key={d.id} value={d.id}>{d.dept_name}</Select.Option>
-              ))}
+              {departments.map((d: any) => <Select.Option key={d.id} value={d.id}>{d.dept_name}</Select.Option>)}
             </Select>
           </Space>
         </div>
-        <Table
-          loading={loading}
-          columns={columns}
-          data={filteredData}
-          rowKey="id"
-          border={false}
-          pagination={{
-            size: 'small',
-            showTotal: true,
-            pageSize: 10,
-          }}
-        />
+        <Table loading={loading} columns={columns} data={filteredData} rowKey="id" size="small" pagination={{ size: 'small', showTotal: true, pageSize: 10 }} />
       </Card>
 
-      <Modal
-        title={editingId ? '编辑人员' : '添加人员'}
-        visible={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        autoFocus={false}
-        focusLock={true}
-      >
-        <Form form={form} layout='vertical'>
-          <Form.Item label='姓名' field='name' rules={[{ required: true, message: '请输入姓名' }]}>
-            <Input placeholder='请输入姓名' />
-          </Form.Item>
-          <Form.Item label='工号' field='staffId'>
-            <Input placeholder='请输入工号' />
-          </Form.Item>
-          <Form.Item label='所属部门' field='deptId' rules={[{ required: true, message: '请选择部门' }]}>
-            <Select placeholder='请选择部门'>
-              {departments.map((d: any) => (
-                <Select.Option key={d.id} value={d.id}>{d.dept_name}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label='职位' field='position'>
-            <Input placeholder='请输入职位' />
-          </Form.Item>
-          <Form.Item label='手机号' field='phone'>
-            <Input placeholder='请输入手机号' />
-          </Form.Item>
+      <Modal title={editingId ? '编辑人员' : '添加人员'} visible={modalVisible} onOk={handleSubmit} onCancel={() => setModalVisible(false)} style={{ width: 480 }}>
+        <Form form={form} layout='vertical' size="small">
+          <Form.Item label='姓名' field='name' rules={[{ required: true, message: '请输入姓名' }]}><Input /></Form.Item>
+          <Form.Item label='工号' field='staffId'><Input /></Form.Item>
+          <Form.Item label='所属部门' field='deptId' rules={[{ required: true }]}><Select>{departments.map((d: any) => <Select.Option key={d.id} value={d.id}>{d.dept_name}</Select.Option>)}</Select></Form.Item>
+          <Form.Item label='职位' field='position'><Input /></Form.Item>
+          <Form.Item label='手机号' field='phone'><Input /></Form.Item>
         </Form>
       </Modal>
     </div>

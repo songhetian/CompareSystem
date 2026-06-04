@@ -158,12 +158,27 @@ function App() {
           onClickMenuItem={handleMenuClick}
           collapse={collapsed}
         >
-          <SubMenu key='decision' title={<span><IconDashboard /> 决策中心</span>}>
+          <SubMenu key='decision' title='决策中心'>
             <MenuItem key='dashboard'>数据看板</MenuItem>
             <MenuItem key='actuarial'>测算建模</MenuItem>
             <MenuItem key='shift'>排班调度</MenuItem>
           </SubMenu>
-          {/* 其他菜单项保持逻辑不变，样式会自动跟随 Arco 主题 */}
+
+          <SubMenu key='data' title='数据资产'>
+            <MenuItem key='report'>分析报告</MenuItem>
+            <MenuItem key='historyData'>历史数据</MenuItem>
+          </SubMenu>
+
+          <SubMenu key='resource' title='资源管理'>
+            <MenuItem key='dept'>组织架构</MenuItem>
+            <MenuItem key='personnel'>人员档案</MenuItem>
+            <MenuItem key='shiftConfig'>班次规则</MenuItem>
+          </SubMenu>
+
+          <SubMenu key='strategy' title='控制策略'>
+            <MenuItem key='promo'>活动策略</MenuItem>
+            <MenuItem key='param'>精算参数</MenuItem>
+          </SubMenu>
         </Menu>
       </Layout.Sider>
 

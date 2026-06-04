@@ -31,6 +31,7 @@ export const HourlyChart = ({ hourlyTotal, hourlyPresale, hourlyMidsale, hourlyA
     yField: 'value',
     seriesField: 'type',
     stack: true,
+    barMaxWidth: 30, // 强制限制柱子最大宽度，确保精致感
     ...commonOptions,
   };
   return <VChart spec={spec} style={{ height: '100%', width: '100%' }} />;

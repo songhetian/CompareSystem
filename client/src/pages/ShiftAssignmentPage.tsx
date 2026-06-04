@@ -3,10 +3,10 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, List, Avatar, Tooltip, Empty, Table, Divider, Input, Alert, Grid, Statistic
+  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, Avatar, Empty, Table, Divider, Input, Alert, Grid, Statistic
 } from '@arco-design/web-react';
 import { 
-  IconSave, IconRefresh, IconFile, IconExclamationCircle, IconCheckCircle, IconCalendar, IconUser, IconSearch, IconApps, IconClockCircle, IconCheck
+  IconRefresh, IconFile, IconExclamationCircle, IconCheckCircle, IconUser, IconApps, IconClockCircle
 } from '@arco-design/web-react/icon';
 import { PageHeader } from '../components/common';
 import dayjs from 'dayjs';
@@ -247,6 +247,34 @@ export const ShiftAssignmentPage = () => {
     return res;
   }, [allAssignments, personnel]);
 
+  // 保存数据逻辑
+  const saveDailyAssignments = async () => {
+    if (!activeDate) return;
+    const dateStr = activeDate.format('YYYY-MM-DD');
+    setLoading(true);
+    try {
+      const dataToSave: any[] = [];
+      Object.entries(tempAssignments).forEach(([pId, sId]) => {
+        dataToSave.push({ personnelId: parseInt(pId), shiftId: sId, date: dateStr, remark: '' });
+      });
+      personnel.forEach(p => {
+        if (tempAssignments[p.id] === undefined) {
+          dataToSave.push({ personnelId: p.id, shiftId: null, date: dateStr });
+        }
+      });
+
+      await window.api.batchAssignments(dataToSave);
+      Message.success(`${dateStr} 排班已保存`);
+      setDetailModalVisible(false);
+      setValidationModalVisible(false);
+      fetchMonthAssignments();
+    } catch (err) {
+      Message.error('保存失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 交互：校验并保存本日排班
   const checkAndSaveDaily = () => {
     if (!activeDate || !selectedReportId || !currentReport) {
@@ -286,33 +314,6 @@ export const ShiftAssignmentPage = () => {
       setValidationModalVisible(true);
     } else {
       saveDailyAssignments();
-    }
-  };
-
-  const saveDailyAssignments = async () => {
-    if (!activeDate) return;
-    const dateStr = activeDate.format('YYYY-MM-DD');
-    setLoading(true);
-    try {
-      const dataToSave: any[] = [];
-      Object.entries(tempAssignments).forEach(([pId, sId]) => {
-        dataToSave.push({ personnelId: parseInt(pId), shiftId: sId, date: dateStr, remark: '' });
-      });
-      personnel.forEach(p => {
-        if (tempAssignments[p.id] === undefined) {
-          dataToSave.push({ personnelId: p.id, shiftId: null, date: dateStr });
-        }
-      });
-
-      await window.api.batchAssignments(dataToSave);
-      Message.success(`${dateStr} 排班已保存`);
-      setDetailModalVisible(false);
-      setValidationModalVisible(false);
-      fetchMonthAssignments();
-    } catch (err) {
-      Message.error('保存失败');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -455,39 +456,117 @@ export const ShiftAssignmentPage = () => {
       {/* 排班详情 Modal */}
       <Modal
         title={
-          <div style={{ padding: '12px 0', textAlign: 'center' }}>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>{activeDate?.format('YYYY-MM-DD')} 调度面板</div>
+          <div style={{ textAlign: 'left' }}>
+            <Title heading={5} style={{ margin: 0 }}>{activeDate?.format('YYYY-MM-DD')} 调度面板</Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>针对选定日期进行精细化人力分派</Text>
           </div>
         }
         visible={detailModalVisible}
         onOk={checkAndSaveDaily}
         onCancel={() => setDetailModalVisible(false)}
-        style={{ width: '90%', maxWidth: 1100, borderRadius: 16 }}
-        okText="完成校验并保存"
+        style={{ width: '95%', maxWidth: 1200, borderRadius: 12 }}
+        okText="确认并保存"
         confirmLoading={loading}
       >
-        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
-          <Row align="center" justify="space-between">
-            <Col span={10}>
-              <Space size="large">
-                <Statistic title="已排" value={Object.values(tempAssignments).filter(v => !!v).length} />
+        <div style={{ background: 'var(--color-fill-1)', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          <Row align="center" gutter={24}>
+            <Col span={8}>
+              <Space size={32}>
+                <Statistic 
+                  title="当前已排" 
+                  value={Object.values(tempAssignments).filter(v => !!v).length} 
+                  styleValue={{ color: 'var(--color-primary-6)', fontWeight: 700 }}
+                  suffix="人"
+                />
                 {activeDate && suggestedMap[activeDate.format('YYYY-MM-DD')] && (
-                  <Statistic title="建议" value={suggestedMap[activeDate.format('YYYY-MM-DD')].needed} />
+                  <Statistic 
+                    title="精算建议" 
+                    value={suggestedMap[activeDate.format('YYYY-MM-DD')].needed} 
+                    suffix="人"
+                  />
                 )}
               </Space>
             </Col>
-            <Col span={14} style={{ textAlign: 'right' }}>
-              <Space>
-                <Input.Search placeholder="搜索人员" value={personnelSearch} onChange={setPersonnelSearch} style={{ width: 220 }} />
-                <Select placeholder="批量班次" value={bulkShift} onChange={setBulkShift} style={{ width: 150 }}>
-                  {shifts.map((s: any) => <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>)}
+            <Col span={16} style={{ textAlign: 'right' }}>
+              <Space size="medium">
+                <Input.Search 
+                  placeholder="搜索姓名/工号" 
+                  value={personnelSearch} 
+                  onChange={(v) => setPersonnelSearch(v)} 
+                  style={{ width: 240, borderRadius: 6 }} 
+                  size="small"
+                />
+                <Divider type="vertical" />
+                <Select 
+                  placeholder="批量选择班次" 
+                  value={bulkShift} 
+                  onChange={setBulkShift} 
+                  style={{ width: 160, borderRadius: 6 }}
+                  size="small"
+                >
+                  {shifts.map((s: any) => (
+                    <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>
+                  ))}
                 </Select>
-                <Button type="primary" icon={<IconApps />} onClick={handleBulkSet} disabled={bulkShift === undefined}>全员应用</Button>
+                <Button 
+                  type="outline" 
+                  icon={<IconApps />} 
+                  onClick={handleBulkSet} 
+                  disabled={bulkShift === undefined}
+                  size="small"
+                >
+                  全员应用
+                </Button>
               </Space>
             </Col>
           </Row>
-        </Card>
+        </div>
         {renderPersonnelModalContent()}
+      </Modal>
+
+      {/* 校验提示 Modal */}
+      <Modal
+        title={
+          <Space>
+            <IconExclamationCircle style={{ color: 'var(--color-warning-6)' }} />
+            <span>排班合规性提醒</span>
+          </Space>
+        }
+        visible={validationModalVisible}
+        onOk={saveDailyAssignments}
+        onCancel={() => setValidationModalVisible(false)}
+        okText="仍要保存"
+        cancelText="返回修改"
+        confirmLoading={loading}
+      >
+        {validationResults.map((res, idx) => (
+          <div key={idx}>
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              content={
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>人力配置不足警告</div>
+                  <div>建议人数: {res.needed} 人，当前已排: {res.planned} 人</div>
+                  <div style={{ color: 'var(--color-danger-6)', marginTop: 4 }}>缺口: {res.headcountGap} 人</div>
+                </div>
+              }
+            />
+            {res.uncoveredShifts.length > 0 && (
+              <Card title="缺失的关键班次" size="small" bordered={false} style={{ background: 'var(--color-fill-2)' }}>
+                <Space wrap>
+                  {res.uncoveredShifts.map((name: string, i: number) => (
+                    <Tag key={i} color="red" size="small">{name}</Tag>
+                  ))}
+                </Space>
+              </Card>
+            )}
+            <div style={{ marginTop: 16, color: 'var(--color-text-3)', fontSize: 12 }}>
+              提示：强制保存可能会导致业务高峰期服务水平下降，建议优先补齐缺口。
+            </div>
+          </div>
+        ))}
       </Modal>
     </div>
   );

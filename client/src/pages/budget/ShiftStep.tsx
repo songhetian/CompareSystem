@@ -1,6 +1,8 @@
-import { Empty, Tag } from '@arco-design/web-react';
+import { Empty, Tag, Typography } from '@arco-design/web-react';
 import { StepProps } from './types';
-import { IconCheck } from '@arco-design/web-react/icon';
+import { IconCheck, IconClockCircle } from '@arco-design/web-react/icon';
+
+const { Text } = Typography;
 
 export const ShiftStep = ({ formData, updateFormData, shifts }: StepProps) => {
   const toggleShift = (shiftId: number) => {
@@ -12,11 +14,11 @@ export const ShiftStep = ({ formData, updateFormData, shifts }: StepProps) => {
 
   return (
     <div style={{ width: '100%' }}>
-      <div style={{ marginBottom: 24, fontSize: 14 }}>
-        已选择 <Tag color='blue' size="small" style={{ margin: '0 4px', fontWeight: 'bold' }}>{formData.selectedShifts.length}</Tag> 个班次方案参与测算排班
+      <div style={{ marginBottom: 20, fontSize: 13 }}>
+        已选择 <Tag color='arcoblue' size="small" style={{ margin: '0 4px', fontWeight: 'bold' }}>{formData.selectedShifts.length}</Tag> 个班次方案参与测算排班
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
         {shifts?.map((shift) => {
           const isSelected = formData.selectedShifts.includes(shift.id);
           return (
@@ -24,44 +26,45 @@ export const ShiftStep = ({ formData, updateFormData, shifts }: StepProps) => {
               key={shift.id}
               onClick={() => toggleShift(shift.id)}
               style={{
-                padding: '16px',
-                borderRadius: 12,
+                padding: '12px 16px',
+                borderRadius: 10,
                 cursor: 'pointer',
-                border: isSelected ? '2px solid #165dff' : '1px solid var(--color-border-2)',
-                background: isSelected ? '#e8f4ff' : 'var(--color-bg-2)',
+                border: isSelected ? '2px solid var(--color-primary-6)' : '1px solid var(--color-border-2)',
+                background: isSelected ? 'var(--color-primary-light-1)' : 'var(--color-bg-2)',
                 transition: 'all 0.2s',
-                boxShadow: isSelected ? '0 4px 12px rgba(22,93,255,0.1)' : '0 2px 5px rgba(0,0,0,0.02)',
                 position: 'relative',
                 overflow: 'hidden'
               }}
             >
-              {/* 现代感选中标签 (右上角蓝色三角+对号) */}
               {isSelected && (
                 <div style={{
                   position: 'absolute',
                   top: 0,
                   right: 0,
-                  width: 32,
-                  height: 32,
-                  background: '#165dff',
-                  borderRadius: '0 0 0 16px',
+                  width: 28,
+                  height: 28,
+                  background: 'var(--color-primary-6)',
+                  borderRadius: '0 0 0 14px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   zIndex: 2
                 }}>
-                  <IconCheck style={{ color: '#fff', fontSize: 16 }} />
+                  <IconCheck style={{ color: '#fff', fontSize: 14 }} />
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: isSelected ? '#165dff' : 'var(--color-text-1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text bold style={{ fontSize: 14, color: isSelected ? 'var(--color-primary-6)' : 'var(--color-text-1)' }}>
                   {shift.shift_name}
-                </span>
+                </Text>
               </div>
-              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--color-text-2)' }}>
-                <div>时段：<span style={{ fontWeight: 500 }}>{shift.start_time} - {shift.end_time}</span></div>
-                <div>时长：<span style={{ fontWeight: 500 }}>{shift.work_hours} 小时</span></div>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--color-text-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <IconClockCircle />
+                    <span>{shift.start_time} - {shift.end_time}</span>
+                </div>
+                <div>时长: {shift.work_hours}h</div>
               </div>
             </div>
           );
