@@ -78,6 +78,15 @@ declare global {
         }>
       ) => Promise<{ success: boolean; count: number }>;
       deleteHistoryData: (ids: number[]) => Promise<any>;
+
+      // 测算草稿持久化 (SQLite)
+      getDraft: () => Promise<{
+        step: number;
+        form_data_json: string;
+        result_json: string;
+      } | null>;
+      saveDraft: (data: { step: number; formData: any; result?: any }) => Promise<any>;
+      clearDraft: () => Promise<any>;
     };
   }
 

@@ -169,6 +169,17 @@ export class DBManager {
       )
     `);
 
+    // 11. 草稿状态表 (用于恢复测算进度和结果)
+    this._db.exec(`
+      CREATE TABLE IF NOT EXISTS draft_state (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        step INTEGER DEFAULT 0,
+        form_data_json TEXT,
+        result_json TEXT,
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // 创建索引
     this._db.exec(`
       CREATE INDEX IF NOT EXISTS idx_project_id ON history_biz_data(project_id);

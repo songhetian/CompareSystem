@@ -1,5 +1,6 @@
 import { Empty, Tag } from '@arco-design/web-react';
 import { StepProps } from './types';
+import { IconCheck } from '@arco-design/web-react/icon';
 
 export const ShiftStep = ({ formData, updateFormData, shifts }: StepProps) => {
   const toggleShift = (shiftId: number) => {
@@ -26,31 +27,37 @@ export const ShiftStep = ({ formData, updateFormData, shifts }: StepProps) => {
                 padding: '16px',
                 borderRadius: 12,
                 cursor: 'pointer',
-                border: isSelected ? '1.5px solid var(--color-primary-6)' : '1px solid var(--color-border-2)',
-                background: isSelected ? 'var(--color-primary-1)' : 'var(--color-bg-2)',
+                border: isSelected ? '2px solid #165dff' : '1px solid var(--color-border-2)',
+                background: isSelected ? '#e8f4ff' : 'var(--color-bg-2)',
                 transition: 'all 0.2s',
                 boxShadow: isSelected ? '0 4px 12px rgba(22,93,255,0.1)' : '0 2px 5px rgba(0,0,0,0.02)',
                 position: 'relative',
                 overflow: 'hidden'
               }}
             >
+              {/* 现代感选中标签 (右上角蓝色三角+对号) */}
+              {isSelected && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 32,
+                  height: 32,
+                  background: '#165dff',
+                  borderRadius: '0 0 0 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 2
+                }}>
+                  <IconCheck style={{ color: '#fff', fontSize: 16 }} />
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: isSelected ? 'var(--color-primary-6)' : 'var(--color-text-1)' }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: isSelected ? '#165dff' : 'var(--color-text-1)' }}>
                   {shift.shift_name}
                 </span>
-                {isSelected && (
-                  <div style={{ 
-                    position: 'absolute',
-                    top: 8,
-                    right: 12,
-                    background: 'transparent', 
-                    color: 'var(--color-primary-6)', 
-                    fontSize: 20, 
-                    fontWeight: '900'
-                  }}>
-                    ✓
-                  </div>
-                )}
               </div>
               <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--color-text-2)' }}>
                 <div>时段：<span style={{ fontWeight: 500 }}>{shift.start_time} - {shift.end_time}</span></div>

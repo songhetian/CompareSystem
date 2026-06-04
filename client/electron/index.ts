@@ -203,6 +203,31 @@ ipcMain.handle('batch:assignments', async (_event: any, assignments: Array<{pers
   return { success: true, count: assignments.length }
 })
 
+// IPC Handlers for Draft State (SQLite Persistence)
+ipcMain.handle('get:draft', async (_event: any) => {
+  const result = dbManager.query('SELECT * FROM draft_state WHERE id = 1', [])
+  return result.length > 0 ? result[0] : null
+})
+
+ipcMain.handle('save:draft', async (_event: any, data: { step: number, formData: any, result?: any }) => {
+  const exists = dbManager.query('SELECT id FROM draft_state WHERE id = 1', [])
+  if (exists.length > 0) {
+    return dbManager.execute(
+      'UPDATE draft_state SET step = ?, form_data_json = ?, result_json = ?, update_time = CURRENT_TIMESTAMP WHERE id = 1',
+      [data.step, JSON.stringify(data.formData), data.result ? JSON.stringify(data.result) : null]
+    )
+  } else {
+    return dbManager.execute(
+      'INSERT INTO draft_state (id, step, form_data_json, result_json) VALUES (1, ?, ?, ?)',
+      [data.step, JSON.stringify(data.formData), data.result ? JSON.stringify(data.result) : null]
+    )
+  }
+})
+
+ipcMain.handle('clear:draft', async (_event: any) => {
+  return dbManager.execute('DELETE FROM draft_state WHERE id = 1', [])
+})
+
 // IPC Handlers for History Projects (新增 - 项目管理)
 ipcMain.handle('get:historyProjects', async (_event: any) => {
   return dbManager.query('SELECT * FROM history_projects WHERE is_active = 1 ORDER BY update_time DESC', [])

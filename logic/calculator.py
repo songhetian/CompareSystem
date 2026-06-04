@@ -11,14 +11,14 @@ class ManpowerCalculator:
         self.timeslot_model = TimeSlotConfigModel(db_manager)
 
     def _get_daily_weights(self, days, event_date, calc_start_date, phase_offset, spread=3, is_uniform=False):
-        if is_uniform:
-            return [1.0/days] * days
+        # Even for uniform/daily, use a wider spread to ensure natural fluctuations instead of a flat line
+        effective_spread = spread * (5 if is_uniform else 1)
         weights = []
         peak_day = event_date + timedelta(days=phase_offset)
         for i in range(days):
             current_day = calc_start_date + timedelta(days=i)
             delta = (current_day - peak_day).days
-            weight = math.exp(-(delta**2) / (2 * (spread**2)))
+            weight = math.exp(-(delta**2) / (2 * (effective_spread**2)))
             weights.append(weight)
         total_w = sum(weights)
         if total_w == 0: return [1.0/days] * days

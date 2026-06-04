@@ -2,7 +2,7 @@ import { Space, Typography, Tag } from '@arco-design/web-react';
 import { BudgetFormData } from './types';
 import dayjs from 'dayjs';
 import { 
-  IconSettings, IconCheckCircle, IconCalendar, IconUserGroup, IconClockCircle, IconHistory 
+  IconSettings, IconCheckCircle, IconCalendar, IconUserGroup, IconClockCircle, IconHistory, IconFire 
 } from '@arco-design/web-react/icon';
 
 const { Text } = Typography;
@@ -14,11 +14,15 @@ interface ConfigSummaryProps {
 }
 
 export const ConfigSummary = ({ formData, schemes, promotions }: ConfigSummaryProps) => {
-  const schemeName = schemes.find(s => s.id === formData.schemeId)?.scheme_name || '未选择';
-  const promoName = promotions.find(p => p.id === formData.promotionId)?.scheme_name || '无活动';
-  const days = formData.dateRange[0] && formData.dateRange[1] 
-    ? dayjs(formData.dateRange[1]).diff(dayjs(formData.dateRange[0]), 'day') + 1 
-    : 0;
+  // 增加安全性检查
+  if (!formData) return null;
+
+  const schemeName = schemes?.find(s => s.id === formData.schemeId)?.scheme_name || '未选择';
+  const promoName = promotions?.find(p => p.id === formData.promotionId)?.scheme_name || '无活动';
+  
+  const startDate = formData.dateRange?.[0];
+  const endDate = formData.dateRange?.[1];
+  const days = (startDate && endDate) ? dayjs(endDate).diff(dayjs(startDate), 'day') + 1 : 0;
 
   return (
     <div style={{
@@ -36,7 +40,7 @@ export const ConfigSummary = ({ formData, schemes, promotions }: ConfigSummaryPr
       </div>
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        {/* 目标与方案 */}
+        {/* 基础设定 */}
         <div>
           <div style={{ fontSize: 12, color: 'var(--color-text-3)', marginBottom: 6 }}>基础设定</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -74,7 +78,7 @@ export const ConfigSummary = ({ formData, schemes, promotions }: ConfigSummaryPr
               <IconClockCircle style={{ color: 'var(--color-text-3)', marginTop: 2 }} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 <Text style={{ marginRight: 4 }}>高峰：</Text>
-                {formData.peakDates.length > 0 ? formData.peakDates.map(d => (
+                {Array.isArray(formData.peakDates) && formData.peakDates.length > 0 ? formData.peakDates.map(d => (
                   <Tag key={d} size="small" color="blue" bordered>{dayjs(d).format('MM-DD')}</Tag>
                 )) : <Text type="secondary">无</Text>}
               </div>
@@ -84,13 +88,13 @@ export const ConfigSummary = ({ formData, schemes, promotions }: ConfigSummaryPr
 
         <div style={{ height: 1, background: 'var(--color-border-1)' }} />
 
-        {/* 班次与数据 */}
+        {/* 排班与数据 */}
         <div>
           <div style={{ fontSize: 12, color: 'var(--color-text-3)', marginBottom: 6 }}>排班与数据</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
               <IconUserGroup style={{ color: 'var(--color-text-3)' }} />
-              <Text>班次方案：已选 {formData.selectedShifts.length} 个</Text>
+              <Text>班次方案：已选 {formData.selectedShifts?.length || 0} 个</Text>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
               <IconHistory style={{ color: 'var(--color-text-3)' }} />
@@ -102,10 +106,3 @@ export const ConfigSummary = ({ formData, schemes, promotions }: ConfigSummaryPr
     </div>
   );
 };
-// IconFire helper
-const IconFire = (props: any) => (
-  <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="square" strokeLinejoin="miter" width="1em" height="1em" {...props}>
-    <path d="M24 44c11.046 0 20-8.954 20-20S24 4 24 4 4 12.954 4 24s8.954 20 20 20Z" />
-    <path d="M24 44a20 20 0 0 1-8-38.33" />
-  </svg>
-);

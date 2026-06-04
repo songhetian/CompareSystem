@@ -13,8 +13,8 @@ const { Text } = Typography;
 
 export const PersonnelPage = () => {
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState([]);
-  const [departments, setDepartments] = useState([]);
+  const [data, setData] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
@@ -96,7 +96,7 @@ export const PersonnelPage = () => {
       console.error(err);
       Message.error('解析或导入失败，请检查 Excel 格式');
     } finally {
-      loadingMsg.close();
+      (loadingMsg as any).close();
       e.target.value = '';
     }
   };
@@ -275,7 +275,6 @@ export const PersonnelPage = () => {
                 onChange={handleImportExcel} 
               />
               <Button 
-                as="span"
                 icon={<IconUpload />}
                 style={{ borderRadius: 8 }}
               >

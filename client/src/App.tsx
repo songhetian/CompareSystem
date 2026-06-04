@@ -1,4 +1,4 @@
-import { Layout, Menu, Typography, Tag, Space, Button } from '@arco-design/web-react';
+import { Layout, Menu, Typography, Tag, Space, Button, Modal } from '@arco-design/web-react';
 import {
   IconDashboard,
   IconCalendar,
@@ -47,13 +47,34 @@ const PAGE_CONFIG = {
 function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [pendingPage, setPendingPage] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isActuarialDirty, setIsDirty] = useState(false);
+
+  const handleMenuClick = (key: string) => {
+    if (currentPage === 'actuarial' && isActuarialDirty) {
+      setPendingPage(key);
+      setShowConfirm(true);
+    } else {
+      setCurrentPage(key);
+    }
+  };
+
+  const proceedNavigation = () => {
+    if (pendingPage) {
+      setCurrentPage(pendingPage);
+      setPendingPage(null);
+      setIsDirty(false); // 重置状态
+    }
+    setShowConfirm(false);
+  };
 
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
         return <DashboardPage />;
       case 'actuarial':
-        return <BudgetPage />;
+        return <BudgetPage onDirtyChange={setIsDirty} />;
       case 'shift':
         return <ShiftAssignmentPage />;
       case 'dept':
@@ -147,7 +168,7 @@ function App() {
             defaultSelectedKeys={['dashboard']}
             selectedKeys={[currentPage]}
             style={{ width: '100%', marginTop: 8 }}
-            onClickMenuItem={setCurrentPage}
+            onClickMenuItem={handleMenuClick}
             collapse={collapsed}
           >
             <SubMenu key='decision' title={<span><IconDashboard />决策中心</span>}>
@@ -220,6 +241,21 @@ function App() {
           {renderPage()}
         </Layout.Content>
       </Layout>
+
+      {/* 退出确认弹窗 */}
+      <Modal
+        title="确认退出？"
+        visible={showConfirm}
+        onOk={proceedNavigation}
+        onCancel={() => {
+          setShowConfirm(false);
+          setPendingPage(null);
+        }}
+        okText="确认离开"
+        cancelText="继续编辑"
+      >
+        当前正在进行人力精算建模，离开页面将导致未保存的配置进度丢失。是否确认离开？
+      </Modal>
     </Layout>
   );
 }

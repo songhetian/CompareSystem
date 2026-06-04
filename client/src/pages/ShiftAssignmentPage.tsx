@@ -1,22 +1,18 @@
 /**
  * 人员排班页面 (日历版)
- * 1. 采用标准的日历 (7列) 布局
- * 2. 部门优先：先选部门再操作
- * 3. 结果关联：关联测算报告，显示需求对标
- * 4. 交互：点击日历格子，弹出该部门全员排班面板
- * 5. 校验：增加合规性校验报告，支持全覆盖检测
  */
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, List, Avatar, Tooltip, Empty, Table, Divider, Input, Alert
+  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, List, Avatar, Tooltip, Empty, Table, Divider, Input, Alert, Grid, Statistic
 } from '@arco-design/web-react';
 import { 
-  IconSave, IconRefresh, IconFile, IconExclamationCircle, IconCheckCircle, IconCalendar, IconUser 
+  IconSave, IconRefresh, IconFile, IconExclamationCircle, IconCheckCircle, IconCalendar, IconUser, IconSearch, IconApps, IconClockCircle, IconCheck
 } from '@arco-design/web-react/icon';
 import { PageHeader } from '../components/common';
 import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
+const { Row, Col } = Grid;
 
 export const ShiftAssignmentPage = () => {
   const [loading, setLoading] = useState(false);
@@ -59,6 +55,7 @@ export const ShiftAssignmentPage = () => {
       newAssignments[p.id] = bulkShift;
     });
     setTempAssignments(newAssignments);
+    Message.success(`已应用至 ${filteredPersonnel.length} 位人员`);
   };
 
   // 1. 初始化 - 整合加载逻辑
@@ -78,7 +75,7 @@ export const ShiftAssignmentPage = () => {
         setHistoryReports(hRes);
         setPersonnel(pRes);
       } catch (err) {
-        Message.error('基础数据加载失败，请检查控制台');
+        Message.error('基础数据加载失败');
       } finally {
         setLoading(false);
       }
@@ -87,7 +84,7 @@ export const ShiftAssignmentPage = () => {
   }, []);
 
   // 获取当月排班数据
-  const fetchMonthAssignments = useMemo(() => async () => {
+  const fetchMonthAssignments = async () => {
     setLoading(true);
     try {
       const start = currentDate.startOf('month').format('YYYY-MM-DD');
@@ -99,17 +96,16 @@ export const ShiftAssignmentPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentDate]);
+  };
 
   useEffect(() => {
     fetchMonthAssignments();
-  }, [currentDate, fetchMonthAssignments]);
+  }, [currentDate]);
 
   const handleDateClick = async (date: dayjs.Dayjs) => {
     setActiveDate(date);
     const dateStr = date.format('YYYY-MM-DD');
     
-    // 获取当天的全部排班
     setLoading(true);
     try {
       const assignments = await window.api.getAssignments(dateStr, dateStr);
@@ -126,16 +122,12 @@ export const ShiftAssignmentPage = () => {
     }
   };
 
-  // ... (在Modal内部渲染逻辑中进行分组)
-
-  // 渲染Modal内部人员列表 - 调试版本
+  // 渲染排班详情Modal内容
   const renderPersonnelModalContent = () => {
-    console.log('DEBUG: Rendering modal content. filteredPersonnel length:', filteredPersonnel.length);
     if (filteredPersonnel.length === 0) {
-      return <Empty description="暂无人员数据" />;
+      return <Empty description="未找到匹配的人员" style={{ padding: '40px 0' }} />;
     }
 
-    // 生成随机颜色工具
     const getAvatarColor = (name: string) => {
         const colors = ['#F53F3F', '#F77234', '#FF7D00', '#F7BA1E', '#00B42A', '#165DFF', '#3491FA', '#722ED1'];
         let hash = 0;
@@ -144,39 +136,89 @@ export const ShiftAssignmentPage = () => {
     };
 
     return (
-      <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '0 8px' }}>
-        {filteredPersonnel.map((p: any) => (
-          <div
-            key={p.id}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--color-fill-2)', background: '#fff' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <Avatar style={{ backgroundColor: getAvatarColor(p.name || '未知') }}>{p.name?.[0] || '?'}</Avatar>
-              <div>
-                <div style={{ fontWeight: 600 }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-3)' }}>工号: {p.staff_id || '-'}</div>
-              </div>
-            </div>
-            <div style={{ width: 240 }}>
-              <Select
-                  placeholder="请选择班次"
-                  allowClear
-                  value={tempAssignments[p.id] || undefined}
-                  onChange={(v) => setTempAssignments((prev: any) => ({ ...prev, [p.id]: v }))}
-                  style={{ width: '100%' }}
+      <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '16px 4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+          {filteredPersonnel.map((p: any) => {
+            const currentShiftId = tempAssignments[p.id];
+            const currentShift = shifts.find(s => s.id === currentShiftId);
+
+            return (
+              <Card 
+                key={p.id}
+                size="small"
+                style={{ 
+                  borderRadius: 12, 
+                  border: currentShiftId ? '1.5px solid var(--color-primary-3)' : '1px solid var(--color-border-2)',
+                  background: currentShiftId ? 'var(--color-primary-light-1)' : '#fff',
+                  transition: 'all 0.2s'
+                }}
               >
-                  {shifts.map((s: any) => (
-                      <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>
-                  ))}
-              </Select>
-            </div>
-          </div>
-        ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* 人员基本信息 */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Avatar size={32} style={{ backgroundColor: getAvatarColor(p.name || '未知') }}>
+                        {p.name?.[0] || '?'}
+                      </Avatar>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-3)' }}>工号: {p.staff_id || '-'}</div>
+                      </div>
+                    </div>
+                    {currentShiftId && (
+                      <Tag color="arcoblue" size="small" icon={<IconCheckCircle />} bordered style={{ borderRadius: 4 }}>
+                        已排
+                      </Tag>
+                    )}
+                  </div>
+
+                  <Divider style={{ margin: '4px 0' }} />
+
+                  {/* 班次选择选择器 */}
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-3)', marginBottom: 4 }}>分派班次</div>
+                    <Select
+                      placeholder="点击分派班次"
+                      allowClear
+                      value={currentShiftId ?? undefined}
+                      onChange={(v) => setTempAssignments((prev: any) => ({ ...prev, [p.id]: v }))}
+                      style={{ width: '100%', borderRadius: 6 }}
+                      size="small"
+                    >
+                      {shifts.map((s: any) => (
+                        <Select.Option key={s.id} value={s.id}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                            <span>{s.shift_name}</span>
+                            <span style={{ fontSize: 10, color: 'var(--color-text-3)' }}>{s.start_time}-{s.end_time}</span>
+                          </div>
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  {/* 班次预览详情 */}
+                  {currentShift && (
+                    <div style={{ 
+                      padding: '8px', 
+                      background: '#fff', 
+                      borderRadius: 6, 
+                      fontSize: 11, 
+                      border: '1px dashed var(--color-primary-3)' 
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary-6)' }}>
+                        <IconClockCircle />
+                        <span>工作时长: {currentShift.work_hours}h</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     );
   };
-
-
 
   // 4. 关联报告
   const currentReport = useMemo(() => 
@@ -189,13 +231,12 @@ export const ShiftAssignmentPage = () => {
     try {
       const resultObj = JSON.parse(currentReport.result_json);
       (resultObj.daily_results || []).forEach((dr: any) => {
-        res[dr.fullDate] = { needed: dr.staff, isPeak: dr.isPeakDay };
+        res[dr.fullDate || dr.date] = { needed: dr.staff, isPeak: dr.isPeakDay };
       });
     } catch(e) {}
     return res;
   }, [currentReport]);
 
-  // 计算每日已排人数 (仅限当前部门)
   const plannedCountMap = useMemo(() => {
     const res: any = {};
     allAssignments.forEach(a => {
@@ -204,18 +245,6 @@ export const ShiftAssignmentPage = () => {
       }
     });
     return res;
-  }, [allAssignments, personnel]);
-
-  // 计算每日班次分布
-  const dailyShiftDistribution = useMemo(() => {
-    const dist: any = {};
-    allAssignments.forEach(a => {
-      if (personnel.some(p => p.id === a.personnel_id)) {
-        if (!dist[a.assignment_date]) dist[a.assignment_date] = new Set();
-        dist[a.assignment_date].add(a.shift_id);
-      }
-    });
-    return dist;
   }, [allAssignments, personnel]);
 
   // 交互：校验并保存本日排班
@@ -232,7 +261,6 @@ export const ShiftAssignmentPage = () => {
       return;
     }
 
-    // 执行单日校验
     const plannedCount = Object.values(tempAssignments).filter(v => !!v).length;
     const currentShiftIds = new Set(Object.values(tempAssignments).filter(v => !!v));
     
@@ -270,7 +298,6 @@ export const ShiftAssignmentPage = () => {
       Object.entries(tempAssignments).forEach(([pId, sId]) => {
         dataToSave.push({ personnelId: parseInt(pId), shiftId: sId, date: dateStr, remark: '' });
       });
-      // 补充未排班人员
       personnel.forEach(p => {
         if (tempAssignments[p.id] === undefined) {
           dataToSave.push({ personnelId: p.id, shiftId: null, date: dateStr });
@@ -289,7 +316,6 @@ export const ShiftAssignmentPage = () => {
     }
   };
 
-  // 日历渲染逻辑
   const dateInnerContent = (date: dayjs.Dayjs) => {
     const dateStr = date.format('YYYY-MM-DD');
     const suggestion = suggestedMap[dateStr];
@@ -297,8 +323,6 @@ export const ShiftAssignmentPage = () => {
     const isPeak = suggestion?.isPeak;
 
     if (!selectedDeptId) return null;
-
-    // 样式优化：高亮当前选中日期
     const isActive = activeDate && date.isSame(activeDate, 'day');
 
     return (
@@ -318,7 +342,7 @@ export const ShiftAssignmentPage = () => {
         }}
       >
         <div style={{ minHeight: 48, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {isPeak && <Badge status="error" text={<span style={{ color: 'var(--color-danger-6)', fontSize: 11, fontWeight: 700 }}>🔥 爆发点</span>} />}
+          {isPeak && <Badge status="error" text="爆发点" />}
           
           <div style={{ 
             marginTop: 'auto',
@@ -341,227 +365,130 @@ export const ShiftAssignmentPage = () => {
   };
 
   return (
-    <div className='page-container' style={{ maxWidth: '100%', width: '100%' }}>
+    <div className='page-container' style={{ maxWidth: '100%', width: '100%', background: '#F7F8FA', minHeight: '100%', padding: '24px' }}>
       <PageHeader
         title='智能排班调度'
         subtitle='基于人力精算结果的智能排班调度系统，实现客服人力资源的精准投放'
         icon='📅'
-        extra={<Button icon={<IconRefresh />} onClick={fetchMonthAssignments}>刷新</Button>}
+        extra={<Button icon={<IconRefresh />} onClick={fetchMonthAssignments}>刷新数据</Button>}
       />
 
-      <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+      <Row gutter={20} style={{ marginTop: 20 }}>
         {/* 左侧控制面板 */}
-        <Card bordered={false} style={{ width: 350, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
-          <Space direction="vertical" size={24} style={{ width: '100%' }}>
-            <div>
-              <Title heading={6} style={{ marginBottom: 12 }}>1. 选择排班部门</Title>
-              <Select
-                placeholder="请选择部门 (必选)"
-                value={selectedDeptId}
-                onChange={setSelectedDeptId}
-                size="large"
-                style={{ width: '100%', borderRadius: 8 }}
-              >
-                {departments.map(d => <Select.Option key={d.id} value={d.id}>{d.dept_name}</Select.Option>)}
-              </Select>
-            </div>
+        <Col span={6}>
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+            <Space direction="vertical" size={24} style={{ width: '100%' }}>
+              <div>
+                <Title heading={6} style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <IconUser style={{ color: '#165DFF' }} /> 1. 选择排班部门
+                </Title>
+                <Select
+                  placeholder="请选择部门"
+                  value={selectedDeptId || undefined}
+                  onChange={setSelectedDeptId}
+                  size="large"
+                  style={{ width: '100%', borderRadius: 8 }}
+                >
+                  {departments.map(d => <Select.Option key={d.id} value={d.id}>{d.dept_name}</Select.Option>)}
+                </Select>
+              </div>
 
-            <div>
-              <Title heading={6} style={{ marginBottom: 12 }}>2. 关联测算报告</Title>
-              <Select
-                placeholder="选择基准报告 (可选)"
-                value={selectedReportId}
-                onChange={setSelectedReportId}
-                allowClear
-                size="large"
-                style={{ width: '100%', borderRadius: 8 }}
-              >
-                {historyReports.map(r => (
-                  <Select.Option key={r.id} value={r.id}>
-                    {r.scheme_name}
-                  </Select.Option>
-                ))}
-              </Select>
-              {currentReport && (
-                <div style={{ marginTop: 12, padding: 12, background: 'var(--color-primary-light-1)', borderRadius: 8, fontSize: 12 }}>
-                  <Space direction="vertical" size={4}>
-                    <Text bold color="arcoblue">报告周期：</Text>
-                    <Text type="secondary">{currentReport.start_date} 至 {currentReport.end_date}</Text>
-                    <div style={{ height: 1, background: 'var(--color-primary-light-3)', margin: '4px 0' }} />
-                    <Text bold color="arcoblue">测算建议：</Text>
-                    <Text type="secondary">总编制需 {JSON.parse(currentReport.result_json).needed_staff} 人</Text>
-                  </Space>
-                </div>
-              )}
-            </div>
+              <div>
+                <Title heading={6} style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <IconFile style={{ color: '#722ED1' }} /> 2. 关联精算报告
+                </Title>
+                <Select
+                  placeholder="选择基准测算报告 (可选)"
+                  value={selectedReportId || undefined}
+                  onChange={setSelectedReportId}
+                  allowClear
+                  size="large"
+                  style={{ width: '100%', borderRadius: 8 }}
+                >
+                  {historyReports.map(r => <Select.Option key={r.id} value={r.id}>{r.scheme_name}</Select.Option>)}
+                </Select>
+                {currentReport && (
+                  <div style={{ marginTop: 12, padding: 12, background: 'linear-gradient(135deg, #E8F3FF 0%, #F0F7FF 100%)', borderRadius: 8, fontSize: 12, border: '1px solid #BAE7FF' }}>
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Text bold color="arcoblue">报告周期</Text>
+                        <Tag size="small" color="blue">有效</Tag>
+                      </div>
+                      <Text type="secondary">{currentReport.start_date} ~ {currentReport.end_date}</Text>
+                      <Divider style={{ margin: '8px 0' }} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text bold color="arcoblue">建议总编制</Text>
+                        <Text bold style={{ fontSize: 16, color: '#165DFF' }}>{JSON.parse(currentReport.result_json).needed_staff} 人</Text>
+                      </div>
+                    </Space>
+                  </div>
+                )}
+              </div>
 
-            <div style={{ padding: 16, background: 'var(--color-fill-2)', borderRadius: 12, fontSize: 13, color: 'var(--color-text-3)' }}>
-              <Space direction="vertical" size={12}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <IconCheckCircle style={{ color: 'var(--color-success-6)' }} />
-                  <span>绿色：人力充足</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <IconExclamationCircle style={{ color: 'var(--color-danger-6)' }} />
-                  <span>红色：人力缺口</span>
-                </div>
-                <Divider style={{ margin: '4px 0' }} />
-                <Text style={{ fontSize: 12 }}>💡 点击日历中的格子，可为部门人员分派具体班次。</Text>
-              </Space>
-            </div>
-          </Space>
-        </Card>
+              <Alert
+                type="info"
+                showIcon
+                content="点击日历中的日期格，即可进入该日的人员详细排班分配界面。"
+                style={{ borderRadius: 8 }}
+              />
+            </Space>
+          </Card>
+        </Col>
 
         {/* 右侧日历 */}
-        <Card 
-          bordered={false} 
-          style={{ flex: 1, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.04)', overflow: 'hidden' }}
-          bodyStyle={{ padding: 0 }}
-        >
-          <Calendar
-            value={currentDate.toDate()}
-            onChange={(d: any) => setCurrentDate(dayjs(d))}
-            dateInnerContent={dateInnerContent}
-            onSelect={(d: any) => handleDateClick(dayjs(d))}
-            style={{ border: 'none' }}
-          />
-        </Card>
-      </div>
+        <Col span={18}>
+          <Card 
+            bordered={false} 
+            style={{ borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.04)', overflow: 'hidden' }}
+            bodyStyle={{ padding: 0 }}
+          >
+            <Calendar
+              value={currentDate.toDate()}
+              onChange={(d: any) => setCurrentDate(dayjs(d))}
+              dateInnerContent={dateInnerContent}
+              style={{ border: 'none' }}
+            />
+          </Card>
+        </Col>
+      </Row>
 
+      {/* 排班详情 Modal */}
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--color-primary-6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <IconCalendar style={{ fontSize: 20 }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{activeDate?.format('YYYY年MM月DD日')} 排班详情</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-3)' }}>当前部门：{departments.find(d => d.id === selectedDeptId)?.dept_name}</div>
-            </div>
+          <div style={{ padding: '12px 0', textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>{activeDate?.format('YYYY-MM-DD')} 调度面板</div>
           </div>
         }
         visible={detailModalVisible}
         onOk={checkAndSaveDaily}
         onCancel={() => setDetailModalVisible(false)}
-        width="90%"
-        style={{ maxWidth: 1200, borderRadius: 16, top: 50 }}
-        okText="校验并保存"
+        style={{ width: '90%', maxWidth: 1100, borderRadius: 16 }}
+        okText="完成校验并保存"
         confirmLoading={loading}
       >
-        {/* 单日汇总统计 */}
-        <div style={{ marginBottom: 16, padding: 12, background: 'var(--color-fill-1)', borderRadius: 8, display: 'flex', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: 24 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-3)' }}>已排人数</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-primary-6)' }}>{Object.values(tempAssignments).filter(v => !!v).length}</div>
-            </div>
-            {activeDate && suggestedMap[activeDate.format('YYYY-MM-DD')] && (
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-3)' }}>测算建议</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-danger-6)' }}>{suggestedMap[activeDate.format('YYYY-MM-DD')].needed}</div>
-              </div>
-            )}
-          </div>
-          {activeDate && suggestedMap[activeDate.format('YYYY-MM-DD')]?.isPeak && (
-            <Tag color="red" bordered style={{ alignSelf: 'center', borderRadius: 4 }}>
-              🔥 爆发高峰日
-            </Tag>
-          )}
-        </div>
-
-        {/* 批量操作工具栏 */}
-        <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-          <Input.Search
-            placeholder="搜索姓名或工号"
-            value={personnelSearch}
-            onChange={(val) => setPersonnelSearch(val)}
-            allowClear
-            style={{ width: 300 }}
-          />
-          <Select
-            placeholder="批量设置班次"
-            value={bulkShift}
-            onChange={setBulkShift}
-            allowClear
-            style={{ width: 200 }}
-          >
-            {shifts.map((s: any) => (
-              <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>
-            ))}
-          </Select>
-          <Button type="primary" onClick={handleBulkSet} disabled={bulkShift === undefined}>应用至 {filteredPersonnel.length} 名搜索结果</Button>
-        </div>
-
+        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
+          <Row align="center" justify="space-between">
+            <Col span={10}>
+              <Space size="large">
+                <Statistic title="已排" value={Object.values(tempAssignments).filter(v => !!v).length} />
+                {activeDate && suggestedMap[activeDate.format('YYYY-MM-DD')] && (
+                  <Statistic title="建议" value={suggestedMap[activeDate.format('YYYY-MM-DD')].needed} />
+                )}
+              </Space>
+            </Col>
+            <Col span={14} style={{ textAlign: 'right' }}>
+              <Space>
+                <Input.Search placeholder="搜索人员" value={personnelSearch} onChange={setPersonnelSearch} style={{ width: 220 }} />
+                <Select placeholder="批量班次" value={bulkShift} onChange={setBulkShift} style={{ width: 150 }}>
+                  {shifts.map((s: any) => <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>)}
+                </Select>
+                <Button type="primary" icon={<IconApps />} onClick={handleBulkSet} disabled={bulkShift === undefined}>全员应用</Button>
+              </Space>
+            </Col>
+          </Row>
+        </Card>
         {renderPersonnelModalContent()}
       </Modal>
-
-      {/* 合规性校验报告 Modal */}
-      <Modal
-        title={
-          <Space>
-            <IconExclamationCircle style={{ color: 'var(--color-warning-6)' }} />
-            <span>排班合规性校验报告</span>
-          </Space>
-        }
-        visible={validationModalVisible}
-        onOk={saveDailyAssignments}
-        onCancel={() => setValidationModalVisible(false)}
-        okText="忽略风险，强制通过"
-        cancelText="取消，返回修改"
-        width={600}
-        style={{ borderRadius: 16 }}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <Text type="secondary">检测到当前排班与测算方案存在不一致：</Text>
-        </div>
-        
-        <Table
-          data={validationResults}
-          pagination={false}
-          rowKey="date"
-          size="small"
-          columns={[
-            {
-              title: '差异项',
-              render: (_, record) => (
-                <Space direction="vertical" size={4}>
-                  <Badge 
-                    status={record.headcountGap > 0 ? 'error' : 'success'} 
-                    text={`人力缺口: ${record.planned} / ${record.needed} (缺 ${record.headcountGap > 0 ? record.headcountGap : 0}人)`} 
-                  />
-                  {record.uncoveredShifts.length > 0 && (
-                    <div style={{ paddingLeft: 12 }}>
-                      <Text type="danger" style={{ fontSize: 12 }}>未覆盖班次: </Text>
-                      {record.uncoveredShifts.map((name: string) => <Tag key={name} color="red" size="mini" style={{ borderRadius: 4, marginRight: 4 }}>{name}</Tag>)}
-                    </div>
-                  )}
-                </Space>
-              )
-            }
-          ]}
-        />
-
-        <div style={{ marginTop: 20, padding: 16, background: 'var(--color-warning-light-1)', borderRadius: 8, border: '1px solid var(--color-warning-light-3)' }}>
-          <Title heading={6} style={{ marginTop: 0, marginBottom: 8, color: 'var(--color-warning-6)' }}>风险提示：</Title>
-          <Text style={{ fontSize: 13, color: 'var(--color-warning-6)' }}>
-            作为管理人员，您拥有一票通过权。点击“强制通过”将保存本日排班，但可能面临服务响应超时或客服过载风险。
-          </Text>
-        </div>
-      </Modal>
-
-      <style>{`
-        .arco-calendar-cell {
-          min-height: 100px !important;
-          transition: all 0.2s;
-        }
-        .arco-calendar-cell:hover {
-          background-color: var(--color-primary-light-1) !important;
-          cursor: pointer;
-        }
-        .arco-calendar-date-value {
-          font-weight: 700;
-        }
-      `}</style>
     </div>
   );
 };

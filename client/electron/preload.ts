@@ -40,8 +40,14 @@ const api = {
   deleteAssignment: (id: number) => ipcRenderer.invoke('delete:assignment', id),
   batchAssignments: (assignments: any[]) => ipcRenderer.invoke('batch:assignments', assignments),
 
-  // 历史项目管理
+  // 测算草稿持久化 (SQLite)
+  getDraft: () => ipcRenderer.invoke('get:draft'),
+  saveDraft: (data: { step: number, formData: any, result?: any }) => ipcRenderer.invoke('save:draft', data),
+  clearDraft: () => ipcRenderer.invoke('clear:draft'),
+
+  // 历史项目
   getHistoryProjects: () => ipcRenderer.invoke('get:historyProjects'),
+
   addHistoryProject: (data: any) => ipcRenderer.invoke('add:historyProject', data),
   updateHistoryProject: (data: any) => ipcRenderer.invoke('update:historyProject', data),
   deleteHistoryProject: (id: number) => ipcRenderer.invoke('delete:historyProject', id),
