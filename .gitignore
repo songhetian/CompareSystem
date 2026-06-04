@@ -1,0 +1,13 @@
+client/node_modules/
+.DS_Store
+client/out/
+client/build/
+client/dist/
+client/coverage/
+*.log
+*.txt
+*.md
+.kiro/
+__pycache__/
+ui/
+.pytest_cache/
