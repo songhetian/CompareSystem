@@ -296,7 +296,6 @@ ipcMain.handle('calc:manpower', async (_event: any, data: any) => {
       parsedPeakDates     // 高峰日期
     )
   } catch (error) {
-    console.error('calc:manpower error:', error)
     throw error
   }
 })
@@ -345,9 +344,6 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_event: any, window: any) => {
     optimizer.watchWindowShortcuts(window)
   })
-
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
 
   createWindow()
 

@@ -43,18 +43,3 @@ const result = ManpowerCalculator.calculateWithShifts(
 );
 
 const dailyResults = result.daily_results;
-const day3 = dailyResults[2];
-const day4 = dailyResults[3];
-
-console.log('=== Bug Condition Exploration Results ===');
-console.log(`Day 3 (non-peak): staff=${day3.staff}, isPeakDay=${day3.isPeakDay}`);
-console.log(`Day 4 (peak): staff=${day4.staff}, isPeakDay=${day4.isPeakDay}`);
-console.log(`Expected day 4 staff (with 1.5x multiplier): ${day3.staff * 1.5}`);
-console.log(`Actual day 4 staff: ${day4.staff}`);
-console.log(`Difference: ${day4.staff - day3.staff} (${((day4.staff / day3.staff - 1) * 100).toFixed(1)}% increase)`);
-console.log(`Expected minimum increase (30%): ${(day3.staff * 1.3).toFixed(1)}`);
-console.log('=========================================');
-console.log('\nAll daily results:');
-dailyResults.forEach((day, i) => {
-  console.log(`Day ${i+1} (${day.fullDate}): staff=${day.staff}, isPeakDay=${day.isPeakDay}`);
-});

@@ -442,10 +442,8 @@ class DBManager {
     const tableInfoHistorical = this._db.prepare("PRAGMA table_info(historical_schemes)").all();
     const hasStartDate = tableInfoHistorical.some((col) => col.name === "start_date");
     if (!hasStartDate) {
-      console.log("🔧 修复 historical_schemes 表，添加 start_date 和 end_date...");
       this._db.exec("ALTER TABLE historical_schemes ADD COLUMN start_date TEXT");
       this._db.exec("ALTER TABLE historical_schemes ADD COLUMN end_date TEXT");
-      console.log("✅ 修复完成");
     }
     this._db.exec(`
       CREATE TABLE IF NOT EXISTS history_projects (
@@ -521,7 +519,6 @@ class DBManager {
       const tableInfo = this._db.prepare("PRAGMA table_info(history_biz_data)").all();
       const hasProjectId = tableInfo.some((col) => col.name === "project_id");
       if (!hasProjectId) {
-        console.log("🔄 检测到旧数据结构，开始迁移...");
         const defaultProject = this._db.prepare(
           "INSERT INTO history_projects (project_name, description) VALUES (?, ?)"
         ).run("默认项目", "从旧版本迁移的历史数据");
@@ -549,11 +546,9 @@ class DBManager {
           SELECT ${defaultProjectId}, data_date, sales_volume, actual_staff, actual_consult, conversion_rate, remark, create_time
           FROM history_biz_data_backup
         `);
-        this._db.exec(`DROP TABLE IF NOT EXISTS history_biz_data_backup;`);
-        console.log("✅ 数据迁移完成");
+        this._db.exec(`DROP TABLE IF EXISTS history_biz_data_backup;`);
       }
     } catch (e) {
-      console.log("⚠️  数据迁移跳过或失败:", e);
     }
     const count = this._db.prepare("SELECT COUNT(*) as count FROM sys_params").get();
     if (count.count === 0) {
@@ -573,11 +568,9 @@ class DBManager {
           const params = JSON.parse(scheme.params_json);
           const hasParams = params && Object.keys(params).length > 1;
           if (!hasParams) {
-            console.log(`🔧 修复空参数方案 ID: ${scheme.id}`);
             this._db.prepare("UPDATE parameter_schemes SET params_json = ? WHERE id = ?").run(JSON.stringify(this._getDefaultParams()), scheme.id);
           }
         } catch (e) {
-          console.log(`⚠️  方案 ${scheme.id} 参数格式错误，修复中...`);
           this._db.prepare("UPDATE parameter_schemes SET params_json = ? WHERE id = ?").run(JSON.stringify(this._getDefaultParams()), scheme.id);
         }
       }
@@ -737,7 +730,6 @@ class DBManager {
       1,
       "系统预设的标准参数配置，适用于大多数电商客服场景"
     );
-    console.log("✅ 默认参数方案已创建");
   }
   query(sql, params = []) {
     return this._db.prepare(sql).all(...params);
@@ -985,7 +977,6 @@ ipcMain.handle("calc:manpower", async (_event, data) => {
       // 高峰日期
     );
   } catch (error) {
-    console.error("calc:manpower error:", error);
     throw error;
   }
 });
@@ -1018,7 +1009,6 @@ app.whenReady().then(() => {
   app.on("browser-window-created", (_event, window) => {
     optimizer.watchWindowShortcuts(window);
   });
-  ipcMain.on("ping", () => console.log("pong"));
   createWindow();
   app.on("activate", function() {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

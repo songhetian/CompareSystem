@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, List, Avatar, Tooltip, Empty, Table, Divider, Input
+  Card, Space, Button, Select, Message, Typography, Tag, Calendar, Badge, Modal, List, Avatar, Tooltip, Empty, Table, Divider, Input, Alert
 } from '@arco-design/web-react';
 import { 
   IconSave, IconRefresh, IconFile, IconExclamationCircle, IconCheckCircle, IconCalendar, IconUser 
@@ -61,41 +61,33 @@ export const ShiftAssignmentPage = () => {
     setTempAssignments(newAssignments);
   };
 
-  // 1. 初始化
+  // 1. 初始化 - 整合加载逻辑
   useEffect(() => {
     const init = async () => {
+      setLoading(true);
       try {
-        const [dRes, sRes, hRes] = await Promise.all([
+        const [dRes, sRes, hRes, pRes] = await Promise.all([
           window.api.getDepartments(),
           window.api.getShifts(),
-          window.api.getHistory()
+          window.api.getHistory(),
+          window.api.getPersonnel()
         ]);
+        
         setDepartments(dRes);
         setShifts(sRes);
         setHistoryReports(hRes);
+        setPersonnel(pRes);
       } catch (err) {
-        Message.error('基础数据加载失败');
+        Message.error('基础数据加载失败，请检查控制台');
+      } finally {
+        setLoading(false);
       }
     };
     init();
   }, []);
 
-  // 2. 部门切换 -> 加载人员
-  useEffect(() => {
-    if (selectedDeptId) {
-      window.api.getPersonnel(selectedDeptId).then(setPersonnel);
-    } else {
-      setPersonnel([]);
-    }
-  }, [selectedDeptId]);
-
-  // 3. 周期/部门切换 -> 加载排班数据
-  useEffect(() => {
-    fetchMonthAssignments();
-  }, [currentDate, selectedDeptId]);
-
-  const fetchMonthAssignments = async () => {
-    if (!selectedDeptId) return;
+  // 获取当月排班数据
+  const fetchMonthAssignments = useMemo(() => async () => {
     setLoading(true);
     try {
       const start = currentDate.startOf('month').format('YYYY-MM-DD');
@@ -107,25 +99,84 @@ export const ShiftAssignmentPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDate]);
 
-  const handleDateClick = (date: dayjs.Dayjs) => {
-    console.log('Date clicked:', date.format('YYYY-MM-DD'));
-    if (!selectedDeptId) {
-      Message.warning('请先选择一个部门');
-      return;
-    }
+  useEffect(() => {
+    fetchMonthAssignments();
+  }, [currentDate, fetchMonthAssignments]);
+
+  const handleDateClick = async (date: dayjs.Dayjs) => {
     setActiveDate(date);
     const dateStr = date.format('YYYY-MM-DD');
-    const assignments = allAssignments.filter(a => a.assignment_date === dateStr);
     
-    const assignmentsMap: any = {};
-    assignments.forEach(a => {
-      assignmentsMap[a.personnel_id] = a.shift_id;
-    });
-    setTempAssignments(assignmentsMap);
-    setDetailModalVisible(true);
+    // 获取当天的全部排班
+    setLoading(true);
+    try {
+      const assignments = await window.api.getAssignments(dateStr, dateStr);
+      const assignmentsMap: any = {};
+      assignments.forEach((a: any) => {
+        assignmentsMap[a.personnel_id] = a.shift_id;
+      });
+      setTempAssignments(assignmentsMap);
+      setDetailModalVisible(true);
+    } catch (e) {
+      Message.error('加载排班数据失败');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // ... (在Modal内部渲染逻辑中进行分组)
+
+  // 渲染Modal内部人员列表 - 调试版本
+  const renderPersonnelModalContent = () => {
+    console.log('DEBUG: Rendering modal content. filteredPersonnel length:', filteredPersonnel.length);
+    if (filteredPersonnel.length === 0) {
+      return <Empty description="暂无人员数据" />;
+    }
+
+    // 生成随机颜色工具
+    const getAvatarColor = (name: string) => {
+        const colors = ['#F53F3F', '#F77234', '#FF7D00', '#F7BA1E', '#00B42A', '#165DFF', '#3491FA', '#722ED1'];
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    };
+
+    return (
+      <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '16px', border: '1px solid red' }}>
+        {filteredPersonnel.map((p: any) => (
+          <div
+            key={p.id}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--color-fill-2)', background: '#fff' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Avatar style={{ backgroundColor: getAvatarColor(p.name || '未知') }}>{p.name?.[0] || '?'}</Avatar>
+              <div>
+                <div style={{ fontWeight: 600 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-3)' }}>工号: {p.staff_id || '-'}</div>
+              </div>
+            </div>
+            <div style={{ width: 240 }}>
+              <Select
+                  placeholder="请选择班次"
+                  allowClear
+                  value={tempAssignments[p.id] || undefined}
+                  onChange={(v) => setTempAssignments((prev: any) => ({ ...prev, [p.id]: v }))}
+                  style={{ width: '100%' }}
+              >
+                  {shifts.map((s: any) => (
+                      <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>
+                  ))}
+              </Select>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+
 
   // 4. 关联报告
   const currentReport = useMemo(() => 
@@ -393,7 +444,7 @@ export const ShiftAssignmentPage = () => {
         onOk={checkAndSaveDaily}
         onCancel={() => setDetailModalVisible(false)}
         width="90%"
-        style={{ maxWidth: 1200, borderRadius: 16, top: 20 }}
+        style={{ maxWidth: 1200, borderRadius: 16, top: 50 }}
         okText="校验并保存"
         confirmLoading={loading}
       >
@@ -441,37 +492,7 @@ export const ShiftAssignmentPage = () => {
           <Button type="primary" onClick={handleBulkSet} disabled={bulkShift === undefined}>应用至 {filteredPersonnel.length} 名搜索结果</Button>
         </div>
 
-        <Table
-          size="medium"
-          pagination={false}
-          scroll={{ y: 400 }}
-          dataSource={filteredPersonnel}
-          columns={[
-            { 
-              title: '姓名', 
-              render: (p) => <Text bold>{p.name || '未命名'}</Text>,
-              flex: 1 
-            },
-            { title: '工号', dataIndex: 'staff_id', flex: 1 },
-            { 
-              title: '班次分配', 
-              flex: 2,
-              render: (_, p) => (
-                <Select
-                  placeholder="休息"
-                  allowClear
-                  value={tempAssignments[p.id] || undefined}
-                  onChange={(v) => setTempAssignments((prev: any) => ({ ...prev, [p.id]: v }))}
-                  style={{ width: '100%' }}
-                >
-                  {shifts.map((s: any) => (
-                    <Select.Option key={s.id} value={s.id}>{s.shift_name}</Select.Option>
-                  ))}
-                </Select>
-              )
-            }
-          ]}
-        />
+        {renderPersonnelModalContent()}
       </Modal>
 
       {/* 合规性校验报告 Modal */}

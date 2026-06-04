@@ -112,16 +112,6 @@ describe('Bug Condition Exploration - Peak Day Staff Multiplier', () => {
     const expectedStaff = day3.staff * 1.5;
     const tolerance = 2;
     expect(Math.abs(day4.staff - expectedStaff)).toBeLessThanOrEqual(tolerance);
-
-    // Log the results for debugging and counterexample documentation
-    console.log('=== Bug Condition Exploration Results ===');
-    console.log(`Day 3 (non-peak): staff=${day3.staff}, isPeakDay=${day3.isPeakDay}`);
-    console.log(`Day 4 (peak): staff=${day4.staff}, isPeakDay=${day4.isPeakDay}`);
-    console.log(`Expected day 4 staff (with 1.5x multiplier): ${expectedStaff}`);
-    console.log(`Actual day 4 staff: ${day4.staff}`);
-    console.log(`Difference: ${day4.staff - day3.staff} (${((day4.staff / day3.staff - 1) * 100).toFixed(1)}% increase)`);
-    console.log(`Expected minimum increase: ${minExpectedStaff - day3.staff} (30% increase)`);
-    console.log('=========================================');
   });
 
   /**
@@ -197,11 +187,6 @@ describe('Bug Condition Exploration - Peak Day Staff Multiplier', () => {
     expect(day10.staff).toBeGreaterThanOrEqual(day9.staff * 1.3);
     const expectedStaff10 = day9.staff * 1.5;
     expect(Math.abs(day10.staff - expectedStaff10)).toBeLessThanOrEqual(2);
-
-    console.log('=== Multiple Peak Days Results ===');
-    console.log(`Day 5 (peak): staff=${day5.staff}, expected≈${expectedStaff5}`);
-    console.log(`Day 10 (peak): staff=${day10.staff}, expected≈${expectedStaff10}`);
-    console.log('===================================');
   });
 });
 
@@ -234,7 +219,7 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     const targetSales = 100000;
     const days = 7;
     const calcStartDate = dayjs('2024-01-01');
-    const eventDate = calcStartDate.add(3, 'day'); // For event mode
+    const eventDate = calcStartDate.add(3, 'day'); // Day 4 (for event mode)
 
     const params: CalcParams = {
       avg_order_value: 160,
@@ -277,15 +262,7 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     dailyResults.forEach((day, index) => {
       // This is the preservation check: no days should be marked as peak
       expect(day.isPeakDay).toBe(false);
-      console.log(`Day ${index + 1}: staff=${day.staff}, isPeakDay=${day.isPeakDay}`);
     });
-
-    // Document the baseline behavior for future reference
-    console.log('=== Preservation Test 1: No Peak Dates (Baseline) ===');
-    console.log(`Total days: ${dailyResults.length}`);
-    console.log(`All days have isPeakDay=false: PASS`);
-    console.log(`Staff values: ${dailyResults.map(d => d.staff).join(', ')}`);
-    console.log('====================================================');
   });
 
   /**
@@ -356,12 +333,6 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     nonMarkedIndices.forEach(i => {
       expect(dailyResults[i].isPeakDay).toBe(false);
     });
-
-    console.log('=== Preservation Test 2: Non-Marked Days (Baseline) ===');
-    dailyResults.forEach((day, i) => {
-      console.log(`Day ${i + 1}: staff=${day.staff}, isPeakDay=${day.isPeakDay}`);
-    });
-    console.log('========================================================');
   });
 
   /**
@@ -408,10 +379,6 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     // Just verify it produces results and all are non-peak
     expect(result.daily_results.length).toBe(7);
     result.daily_results.forEach(day => expect(day.isPeakDay).toBe(false));
-
-    console.log('=== Preservation Test 3: Promotion Factor (Baseline) ===');
-    console.log(`Needed staff: ${result.needed_staff}`);
-    console.log('=========================================================');
   });
 
   /**
@@ -467,12 +434,6 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     // Just verify it uses history data and all are non-peak
     expect(result.daily_results.length).toBe(7);
     result.daily_results.forEach(day => expect(day.isPeakDay).toBe(false));
-
-    console.log('=== Preservation Test 4: History Data (Baseline) ===');
-    result.daily_results.forEach((day, i) => {
-      console.log(`Day ${i + 1}: staff=${day.staff}, historySales=${historyData[i].sales_volume}`);
-    });
-    console.log('====================================================');
   });
 
   /**
@@ -525,11 +486,6 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     // After fix, eventDates will NOT affect isPeakDay, only Gaussian distribution
     const day7 = result.daily_results[6];
     expect(day7.isPeakDay).toBe(false); // Fixed behavior: eventDates don't mark peak days
-
-    console.log('=== Preservation Test 5: Event Dates (Fixed Behavior) ===');
-    console.log(`Day 7 isPeakDay: ${day7.isPeakDay} (correctly false - eventDates only affect Gaussian distribution)`);
-    console.log(`Note: After fix, eventDates only affect Gaussian distribution, not peak day marking`);
-    console.log('============================================================');
   });
 
   /**
@@ -586,10 +542,6 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     expect(result.hourly_midsale).toHaveLength(24);
     expect(result.hourly_aftersale).toHaveLength(24);
     expect(result.hourly_total).toHaveLength(24);
-
-    console.log('=== Preservation Test 6: 24-Hour Distribution (Baseline) ===');
-    console.log(`Hourly arrays present with 24 elements each`);
-    console.log('============================================================');
   });
 
   /**
@@ -638,10 +590,5 @@ describe('Preservation Property Tests - Non-Peak Date Calculation Logic Unchange
     expect(result.sensitivity.conversion_rate).toBeDefined();
     expect(typeof result.sensitivity.avg_order_value).toBe('number');
     expect(typeof result.sensitivity.conversion_rate).toBe('number');
-
-    console.log('=== Preservation Test 7: Sensitivity Analysis (Baseline) ===');
-    console.log(`Avg order value sensitivity: ${result.sensitivity.avg_order_value}`);
-    console.log(`Conversion rate sensitivity: ${result.sensitivity.conversion_rate}`);
-    console.log('=============================================================');
   });
 });

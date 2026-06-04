@@ -104,7 +104,17 @@ export const PersonnelPage = () => {
   const handleAdd = () => {
     setEditingId(null);
     form.resetFields();
+    // Auto-generate employee ID
+    form.setFieldsValue({ staffId: `ST-${Date.now().toString().slice(-6)}` });
     setModalVisible(true);
+  };
+
+  // 生成随机颜色工具
+  const getAvatarColor = (name: string) => {
+    const colors = ['#F53F3F', '#F77234', '#FF7D00', '#F7BA1E', '#00B42A', '#165DFF', '#3491FA', '#722ED1'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
   };
 
   const handleEdit = (record: any) => {
@@ -160,13 +170,13 @@ export const PersonnelPage = () => {
     {
       title: '姓名',
       dataIndex: 'name',
-      render: (val: string) => (
+      render: (val: string, record: any) => (
         <Space>
           <div style={{ 
             width: 32, height: 32, borderRadius: '50%', 
-            background: 'var(--color-fill-3)', 
+            background: getAvatarColor(val), 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--color-text-2)', fontSize: 14, fontWeight: 600
+            color: '#fff', fontSize: 14, fontWeight: 600
           }}>
             {val.charAt(0)}
           </div>

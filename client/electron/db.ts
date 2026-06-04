@@ -94,10 +94,8 @@ export class DBManager {
     const tableInfoHistorical = this._db.prepare("PRAGMA table_info(historical_schemes)").all() as any[];
     const hasStartDate = tableInfoHistorical.some((col: any) => col.name === 'start_date');
     if (!hasStartDate) {
-      console.log('🔧 修复 historical_schemes 表，添加 start_date 和 end_date...');
       this._db.exec('ALTER TABLE historical_schemes ADD COLUMN start_date TEXT');
       this._db.exec('ALTER TABLE historical_schemes ADD COLUMN end_date TEXT');
-      console.log('✅ 修复完成');
     }
 
     // 6. 历史项目表 (多项目/多店铺支持)
@@ -189,7 +187,6 @@ export class DBManager {
       const hasProjectId = tableInfo.some((col: any) => col.name === 'project_id');
 
       if (!hasProjectId) {
-        console.log('🔄 检测到旧数据结构，开始迁移...');
 
         // 创建默认项目
         const defaultProject = this._db.prepare(
@@ -230,12 +227,9 @@ export class DBManager {
         `);
 
         // 删除备份表
-        this._db.exec(`DROP TABLE IF NOT EXISTS history_biz_data_backup;`);
-
-        console.log('✅ 数据迁移完成');
+        this._db.exec(`DROP TABLE IF EXISTS history_biz_data_backup;`);
       }
     } catch (e) {
-      console.log('⚠️  数据迁移跳过或失败:', e);
     }
 
     // 插入默认数据（如果为空）
@@ -264,13 +258,11 @@ export class DBManager {
           // 检查是否为空对象或没有关键参数
           const hasParams = params && Object.keys(params).length > 1; // >1 是因为可能只有 _config
           if (!hasParams) {
-            console.log(`🔧 修复空参数方案 ID: ${scheme.id}`);
             // 更新为默认参数
             this._db.prepare('UPDATE parameter_schemes SET params_json = ? WHERE id = ?')
               .run(JSON.stringify(this._getDefaultParams()), scheme.id);
           }
         } catch (e) {
-          console.log(`⚠️  方案 ${scheme.id} 参数格式错误，修复中...`);
           this._db.prepare('UPDATE parameter_schemes SET params_json = ? WHERE id = ?')
             .run(JSON.stringify(this._getDefaultParams()), scheme.id);
         }
@@ -448,8 +440,6 @@ export class DBManager {
       1,
       '系统预设的标准参数配置，适用于大多数电商客服场景'
     );
-
-    console.log('✅ 默认参数方案已创建');
   }
 
   public query(sql: string, params: any[] = []) {

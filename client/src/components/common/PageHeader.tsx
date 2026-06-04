@@ -40,8 +40,8 @@ export const PageHeader = ({
 
       {/* 标题区域 */}
       <div className='flex-between' style={{ alignItems: 'flex-start' }}>
-        <Space direction='vertical' size={4}>
-          <Space align='center' size={16}>
+        <Space direction='vertical' size={4} style={{ width: '100%', textAlign: 'center' }}>
+          <Space align='center' size={16} style={{ justifyContent: 'center' }}>
             {icon && <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>}
             <Title heading={4} style={{ margin: 0, fontWeight: 600 }}>
               {title}
