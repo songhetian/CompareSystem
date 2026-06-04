@@ -5,6 +5,28 @@
   "main": "./out/main/index.js",
   "author": "Song",
   "type": "module",
+  "build": {
+    "appId": "com.yourcompany.appname",
+    "productName": "雷犀人力精算引擎",
+    "directories": {
+      "buildResources": "resources"
+    },
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
