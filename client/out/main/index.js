@@ -439,6 +439,14 @@ class DBManager {
         create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    const tableInfoHistorical = this._db.prepare("PRAGMA table_info(historical_schemes)").all();
+    const hasStartDate = tableInfoHistorical.some((col) => col.name === "start_date");
+    if (!hasStartDate) {
+      console.log("🔧 修复 historical_schemes 表，添加 start_date 和 end_date...");
+      this._db.exec("ALTER TABLE historical_schemes ADD COLUMN start_date TEXT");
+      this._db.exec("ALTER TABLE historical_schemes ADD COLUMN end_date TEXT");
+      console.log("✅ 修复完成");
+    }
     this._db.exec(`
       CREATE TABLE IF NOT EXISTS history_projects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

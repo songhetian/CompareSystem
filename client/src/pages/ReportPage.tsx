@@ -72,6 +72,7 @@ export const ReportPage = () => {
     try {
       const res = JSON.parse(record.result_json || '{}');
       const dailyResults = res.daily_results || [];
+      const params = JSON.parse(record.params_json || '{}');
       
       if (dailyResults.length === 0) {
         Message.warning('当前报告无逐日明细数据可导出');
@@ -79,39 +80,86 @@ export const ReportPage = () => {
       }
 
       const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet('每日人力明细');
+      
+      // ========== 第1个Sheet：测算汇总 ==========
+      const summarySheet = workbook.addWorksheet('测算汇总');
 
-      sheet.columns = [
-        { header: '日期', key: 'date', width: 15 },
-        { header: '高峰日', key: 'isPeak', width: 12 },
-        { header: '总需求(人)', key: 'staff', width: 12 },
-        { header: '售前(人)', key: 'pre', width: 10 },
-        { header: '售中(人)', key: 'mid', width: 10 },
-        { header: '售后(人)', key: 'after', width: 10 },
-        { header: '售前咨询', key: 'vol_pre', width: 12 },
-        { header: '售中咨询', key: 'vol_mid', width: 12 },
-        { header: '售后咨询', key: 'vol_after', width: 12 },
+      summarySheet.mergeCells('A1:D1');
+      const titleCell = summarySheet.getCell('A1');
+      titleCell.value = '人力需求测算报告';
+      titleCell.font = { size: 16, bold: true };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F0FF' } };
+
+      summarySheet.addRow([]);
+      summarySheet.addRow(['测算名称', record.scheme_name]);
+      summarySheet.addRow(['导出时间', dayjs().format('YYYY-MM-DD HH:mm:ss')]);
+      summarySheet.addRow(['周期', `${record.start_date || 'N/A'} 至 ${record.end_date || 'N/A'}`]);
+      summarySheet.addRow([]);
+
+      summarySheet.addRow(['核心指标', '', '', '']);
+      summarySheet.getRow(7).font = { bold: true };
+      summarySheet.getRow(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+      
+      summarySheet.addRow(['建议总编制', res.needed_staff || 0, '人']);
+      summarySheet.addRow(['售前人员', res.presale_staff || 0, '人']);
+      summarySheet.addRow(['售中人员', res.midsale_staff || 0, '人']);
+      summarySheet.addRow(['售后人员', res.aftersale_staff || 0, '人']);
+      
+      summarySheet.columns = [{ width: 20 }, { width: 30 }, { width: 15 }];
+
+      // ========== 第2个Sheet：每日人力需求明细 ==========
+      const dailySheet = workbook.addWorksheet('每日人力需求明细');
+      
+      // 表头
+      const dailyHeaders = ['日期', '是否高峰日', '总需求(人)', '售前(人)', '售中(人)', '售后(人)', '售前话务量', '售中话务量', '售后话务量'];
+      const dailyHeaderRow = dailySheet.addRow(dailyHeaders);
+      dailyHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      dailyHeaderRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
+      dailyHeaderRow.eachCell((cell) => {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // 数据行
+      dailyResults.forEach((day: any) => {
+        const row = dailySheet.addRow([
+          day.fullDate || day.date,
+          day.isPeakDay ? '是 🔥' : '否',
+          day.staff || 0,
+          day.presale || 0,
+          day.midsale || 0,
+          day.aftersale || 0,
+          Math.round(day.vol_pre || 0),
+          Math.round(day.vol_mid || 0),
+          Math.round(day.vol_after || 0)
+        ]);
+        
+        // 高峰日高亮
+        if (day.isPeakDay) {
+          row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE6E6' } };
+          });
+        }
+      });
+
+      // 设置列宽
+      dailySheet.columns = [
+        { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 12 }, { width: 12 }, { width: 12 }
       ];
 
-      dailyResults.forEach((day: any) => {
-        sheet.addRow({
-          date: day.fullDate || day.date,
-          isPeak: day.isPeakDay ? '是' : '否',
-          staff: day.staff || 0,
-          pre: day.presale || 0,
-          mid: day.midsale || 0,
-          after: day.aftersale || 0,
-          vol_pre: Math.round(day.vol_pre || 0),
-          vol_mid: Math.round(day.vol_mid || 0),
-          vol_after: Math.round(day.vol_after || 0)
+      // 添加边框
+      dailySheet.eachRow((row) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
         });
       });
 
-      // 美化表头
-      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
-      sheet.getRow(1).alignment = { horizontal: 'center' };
-
+      // ========== 导出文件 ==========
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
@@ -119,11 +167,11 @@ export const ReportPage = () => {
       anchor.href = url;
       
       const safeName = (record.scheme_name || 'report').replace(/[\\\/:\*\?"<>|]/g, '_');
-      anchor.download = `精算明细_${safeName}_${dayjs().format('YYYYMMDD')}.xlsx`;
+      anchor.download = `人力测算报告_${safeName}_${dayjs().format('YYYYMMDD')}.xlsx`;
       
       anchor.click();
       window.URL.revokeObjectURL(url);
-      Message.success(`成功导出 ${dailyResults.length} 天的明细数据`);
+      Message.success('报表导出成功！包含测算汇总、每日明细');
     } catch (err: any) {
       console.error('Export failed:', err);
       Message.error(`导出失败: ${err.message || '未知错误'}`);

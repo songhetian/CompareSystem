@@ -90,6 +90,16 @@ export class DBManager {
       )
     `);
 
+    // 检查 historical_schemes 是否缺少 start_date 和 end_date
+    const tableInfoHistorical = this._db.prepare("PRAGMA table_info(historical_schemes)").all() as any[];
+    const hasStartDate = tableInfoHistorical.some((col: any) => col.name === 'start_date');
+    if (!hasStartDate) {
+      console.log('🔧 修复 historical_schemes 表，添加 start_date 和 end_date...');
+      this._db.exec('ALTER TABLE historical_schemes ADD COLUMN start_date TEXT');
+      this._db.exec('ALTER TABLE historical_schemes ADD COLUMN end_date TEXT');
+      console.log('✅ 修复完成');
+    }
+
     // 6. 历史项目表 (多项目/多店铺支持)
     this._db.exec(`
       CREATE TABLE IF NOT EXISTS history_projects (
