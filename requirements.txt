@@ -1,5 +1,0 @@
-customtkinter
-pandas
-numpy
-scikit-learn
-CTkDateEntry

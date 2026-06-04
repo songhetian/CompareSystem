@@ -1,42 +1,21 @@
 import { useState, useEffect } from 'react';
 import {
   Typography, Card, Button, Table, Space, Message, Modal, Form, Input,
-  Select, Upload, Tag, Empty, Divider, Popconfirm, Radio
+  Select, Upload, Tag, Empty, Divider, Popconfirm
 } from '@arco-design/web-react';
 import {
   IconDownload, IconUpload, IconDelete, IconRefresh,
-  IconPlus, IconEdit, IconHistory, IconFolderAdd
+  IconPlus, IconEdit, IconHistory, IconFolderAdd,
+  IconFile, IconSettings, IconUserGroup, IconThunderbolt
 } from '@arco-design/web-react/icon';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title as ChartTitle,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
 import { PageHeader, StatsCard } from '../components/common';
 import { TrendChart } from './historyData/TrendChart';
 
 dayjs.extend(weekOfYear);
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  ChartTitle,
-  Tooltip,
-  Legend,
-  Filler
-);
+dayjs.locale('zh-cn');
 
 const { Title, Text } = Typography;
 
@@ -493,29 +472,25 @@ export const HistoryDataPage = () => {
                   title="总记录数"
                   value={statistics.totalRecords}
                   suffix="条"
-                  icon='📝'
-                  color='#00B42A'
+                  icon={<IconFile />}
                 />
                 <StatsCard
                   title="平均销售额"
                   value={statistics.avgSales}
                   suffix="万"
-                  icon='💰'
-                  color='#165DFF'
+                  icon={<IconSettings />}
                 />
                 <StatsCard
                   title="平均人数"
                   value={statistics.avgStaff}
                   suffix="人"
-                  icon='👥'
-                  color='#FF7D00'
+                  icon={<IconUserGroup />}
                 />
                 <StatsCard
                   title="人均效率"
                   value={statistics.avgEfficiency}
                   suffix="万/人"
-                  icon='⚡'
-                  color='#722ED1'
+                  icon={<IconThunderbolt />}
                 />
               </div>
             )}

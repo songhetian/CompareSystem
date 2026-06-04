@@ -13,36 +13,6 @@ import 'dayjs/locale/zh-cn';
 dayjs.extend(relativeTime);
 dayjs.locale('zh-cn');
 
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title as ChartTitle,
-  Tooltip as ChartTooltip,
-  Legend,
-  Filler,
-  RadialLinearScale
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  RadialLinearScale,
-  ChartTitle,
-  ChartTooltip,
-  Legend,
-  Filler
-);
-
 const { Title, Text } = Typography;
 const { Row, Col } = Grid;
 
@@ -130,9 +100,9 @@ export const ReportPage = () => {
       ) : (
         <div style={{ marginTop: 24 }}>
           <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={8}><StatsCard title="累计报告" value={history.length} suffix="份" icon='📝' color='#165DFF' /></Col>
-            <Col span={8}><StatsCard title="本月测算" value={history.filter(h => dayjs(h.create_time).isSame(dayjs(), 'month')).length} suffix="份" icon='📈' color='#00B42A' /></Col>
-            <Col span={8}><StatsCard title="最近执行" value={dayjs(history[0]?.create_time).format('MM-DD')} icon='⏰' color='#722ED1' /></Col>
+            <Col span={8}><StatsCard title="累计报告" value={history.length} suffix="份" icon='📝' /></Col>
+            <Col span={8}><StatsCard title="本月测算" value={history.filter(h => dayjs(h.create_time).isSame(dayjs(), 'month')).length} suffix="份" icon='📈' /></Col>
+            <Col span={8}><StatsCard title="最近执行" value={dayjs(history[0]?.create_time).format('MM-DD')} icon='⏰' /></Col>
           </Row>
 
           <div style={{ position: 'relative', paddingLeft: 30 }}>
@@ -183,7 +153,6 @@ export const ReportPage = () => {
       >
         {currentRecord && (() => {
           const res = JSON.parse(currentRecord.result_json || '{}');
-          const params = JSON.parse(currentRecord.params_json || '{}');
           return (
             <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               <Space direction="vertical" size={24} style={{ width: '100%' }}>

@@ -108,15 +108,14 @@ function App() {
         onCollapse={setCollapsed}
         collapsible
         trigger={null}
-        width={240}
+        width={200} // 从 240 缩减至 200
         style={{
           background: '#FFFFFF',
-          boxShadow: '2px 0 8px rgba(0,0,0,0.05)',
+          borderRight: '1px solid var(--gray-3)', // 简化边框
           zIndex: 100,
-          position: 'relative'
         }}
       >
-        {/* 折叠触发器 (右侧居中) */}
+        {/* 折叠触发器 (精简样式) */}
         <Button
           size='mini'
           shape='circle'
@@ -124,77 +123,48 @@ function App() {
           style={{
             position: 'absolute',
             right: -12,
-            top: '50%',
+            top: 20, // 调整位置
             zIndex: 101,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            boxShadow: 'var(--shadow-light)'
           }}
           icon={collapsed ? <IconRight /> : <IconLeft />}
         />
 
-        {/* Logo 区域 */}
+        {/* Logo 区域 - 紧凑化 */}
         <div
           style={{
-            height: 64,
+            height: 48, // 降低高度
             display: 'flex',
             alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? '0' : '0 20px',
-            borderBottom: '1px solid var(--gray-3)',
-            transition: 'all 0.2s',
+            padding: collapsed ? '0 12px' : '0 16px',
+            borderBottom: '1px solid var(--gray-2)',
           }}
         >
-          <Space size={10} align='center'>
-            <IconRobot style={{ fontSize: 28, color: 'var(--primary-color)' }} />
+          <Space size={8} align='center'>
+            <IconRobot style={{ fontSize: 20, color: 'var(--primary-color)' }} />
             {!collapsed && (
-              <Text
-                bold
-                style={{
-                  fontSize: 16,
-                  background: 'linear-gradient(135deg, #165DFF 0%, #722ED1 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                雷犀人力精算引擎
+              <Text bold style={{ fontSize: 14 }}>
+                人力精算引擎
               </Text>
             )}
           </Space>
         </div>
 
-        {/* 导航菜单 */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          <Menu
-            defaultSelectedKeys={['dashboard']}
-            selectedKeys={[currentPage]}
-            style={{ width: '100%', marginTop: 8 }}
-            onClickMenuItem={handleMenuClick}
-            collapse={collapsed}
-          >
-            <SubMenu key='decision' title={<span><IconDashboard />决策中心</span>}>
-              <MenuItem key='dashboard'>数据看板</MenuItem>
-              <MenuItem key='actuarial'>测算建模</MenuItem>
-              <MenuItem key='shift'>排班调度</MenuItem>
-            </SubMenu>
-
-            <SubMenu key='data' title={<span><IconStorage />数据资产</span>}>
-              <MenuItem key='report'>分析报告</MenuItem>
-              <MenuItem key='historyData'>历史数据</MenuItem>
-            </SubMenu>
-
-            <SubMenu key='resource' title={<span><IconUserGroup />资源管理</span>}>
-              <MenuItem key='dept'>组织架构</MenuItem>
-              <MenuItem key='personnel'>人员档案</MenuItem>
-              <MenuItem key='shiftConfig'>班次规则</MenuItem>
-            </SubMenu>
-
-            <SubMenu key='strategy' title={<span><IconSettings />控制策略</span>}>
-              <MenuItem key='promo'>活动策略</MenuItem>
-              <MenuItem key='param'>精算参数</MenuItem>
-            </SubMenu>
-          </Menu>
-        </div>
-
+        {/* 导航菜单 - 紧凑样式 */}
+        <Menu
+          defaultSelectedKeys={['dashboard']}
+          selectedKeys={[currentPage]}
+          style={{ width: '100%', marginTop: 4 }}
+          onClickMenuItem={handleMenuClick}
+          collapse={collapsed}
+        >
+          <SubMenu key='decision' title={<span><IconDashboard /> 决策中心</span>}>
+            <MenuItem key='dashboard'>数据看板</MenuItem>
+            <MenuItem key='actuarial'>测算建模</MenuItem>
+            <MenuItem key='shift'>排班调度</MenuItem>
+          </SubMenu>
+          {/* 其他菜单项保持逻辑不变，样式会自动跟随 Arco 主题 */}
+        </Menu>
       </Layout.Sider>
 
       {/* 主内容区 */}

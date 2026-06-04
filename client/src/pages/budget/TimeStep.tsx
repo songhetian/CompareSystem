@@ -1,7 +1,7 @@
 import { Form, DatePicker, Select, Tag, Space, Button, Typography } from '@arco-design/web-react';
 import { StepProps } from './types';
 import dayjs from 'dayjs';
-import { IconCalendar, IconClose } from '@arco-design/web-react/icon';
+import { IconCalendar } from '@arco-design/web-react/icon';
 import { useState } from 'react';
 
 const { RangePicker } = DatePicker;
@@ -10,14 +10,12 @@ const { Text } = Typography;
 export const TimeStep = ({ formData, updateFormData, form, promotions }: StepProps) => {
   const [pickerVisible, setPickerVisible] = useState(false);
 
-  // 移除某个高峰日
   const handleRemovePeakDate = (dateToRemove: string) => {
     const newDates = formData.peakDates.filter(d => d !== dateToRemove);
     updateFormData('peakDates', newDates);
     form.setFieldValue('peakDates', newDates);
   };
 
-  // 添加高峰日
   const handleAddPeakDate = (dateString: string) => {
     if (!formData.peakDates.includes(dateString)) {
       const newDates = [...formData.peakDates, dateString].sort();
@@ -28,9 +26,10 @@ export const TimeStep = ({ formData, updateFormData, form, promotions }: StepPro
   };
 
   return (
-    <Form form={form} layout='vertical' size='large' style={{ width: '100%' }} requiredSymbol={{ position: 'end' }}>
+    <Form form={form} layout='vertical' size='small' style={{ width: '100%' }}>
       <Form.Item label='1. 测算周期' field='dateRange' required rules={[{ required: true, message: '请选择测算周期' }]}>
         <RangePicker
+          size='small'
           value={formData.dateRange.map((d) => dayjs(d)) as any}
           onChange={(dateStrings) => {
             updateFormData('dateRange', dateStrings);
@@ -42,6 +41,7 @@ export const TimeStep = ({ formData, updateFormData, form, promotions }: StepPro
 
       <Form.Item label='2. 营销计划关联（可选）' field='promotionId'>
         <Select
+          size='small'
           placeholder='关联营销活动以应用业务影响系数'
           value={formData.promotionId || undefined}
           onChange={(v) => updateFormData('promotionId', v)}
@@ -63,22 +63,21 @@ export const TimeStep = ({ formData, updateFormData, form, promotions }: StepPro
       </Form.Item>
 
       <Form.Item label='3. 高峰日期（可选）' field='peakDates' extra="设定为高峰日期的天数，将应用特殊的计算系数">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', minHeight: 40 }}>
+        <Space wrap>
           {formData.peakDates.map((date) => (
             <Tag
               key={date}
-              size="large"
+              size="small"
               closable
               onClose={() => handleRemovePeakDate(date)}
               color="blue"
-              style={{ borderRadius: 6, padding: '0 12px' }}
             >
-              <IconCalendar style={{ marginRight: 6 }} />
               {date}
             </Tag>
           ))}
           
           <DatePicker
+            size='small'
             triggerProps={{
               popupVisible: pickerVisible,
               onVisibleChange: setPickerVisible,
@@ -97,14 +96,13 @@ export const TimeStep = ({ formData, updateFormData, form, promotions }: StepPro
             type="dashed" 
             size="small" 
             onClick={() => setPickerVisible(true)}
-            style={{ borderRadius: 6, height: 32 }}
           >
-            + 添加高峰日期
+            + 添加
           </Button>
-        </div>
+        </Space>
         
         {formData.peakDates.length === 0 && (
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
             暂未选择任何高峰日期
           </Text>
         )}

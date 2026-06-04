@@ -17,7 +17,7 @@ import {
   TimePicker,
   Empty,
 } from '@arco-design/web-react';
-import { IconPlus, IconEdit, IconDelete, IconRefresh } from '@arco-design/web-react/icon';
+import { IconPlus, IconEdit, IconDelete, IconRefresh, IconClockCircle, IconSettings, IconDashboard } from '@arco-design/web-react/icon';
 import { PageHeader, StatsCard } from '../components/common';
 import dayjs from 'dayjs';
 
@@ -206,10 +206,10 @@ export const ShiftPage = () => {
         <Space direction='vertical' size={16} style={{ width: '100%' }}>
           {/* 统计卡片 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            <StatsCard title='早班' value={shiftStats.早班} suffix='个' icon='🌅' color='#FF9966' />
-            <StatsCard title='中班' value={shiftStats.中班} suffix='个' icon='☀️' color='#4FACFE' />
-            <StatsCard title='晚班' value={shiftStats.晚班} suffix='个' icon='🌙' color='#A18CD1' />
-            <StatsCard title='全天' value={shiftStats.全天} suffix='个' icon='🌍' color='#10B981' />
+            <StatsCard title='早班' value={shiftStats.早班} suffix='个' icon={<IconClockCircle />} />        
+            <StatsCard title='中班' value={shiftStats.中班} suffix='个' icon={<IconClockCircle />} />        
+            <StatsCard title='晚班' value={shiftStats.晚班} suffix='个' icon={<IconSettings />} />        
+            <StatsCard title='全天' value={shiftStats.全天} suffix='个' icon={<IconDashboard />} />
           </div>
 
           {/* 班次列表 */}
