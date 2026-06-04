@@ -144,7 +144,7 @@ export const ShiftAssignmentPage = () => {
     };
 
     return (
-      <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '16px', border: '1px solid red' }}>
+      <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '0 8px' }}>
         {filteredPersonnel.map((p: any) => (
           <div
             key={p.id}

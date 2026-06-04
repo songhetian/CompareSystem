@@ -135,7 +135,7 @@ function App() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                人力精算引擎
+                雷犀人力精算引擎
               </Text>
             )}
           </Space>
@@ -225,4 +225,3 @@ function App() {
 }
 
 export default App;
-
